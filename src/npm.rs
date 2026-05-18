@@ -26,7 +26,11 @@ fn extract_version(range: &str) -> Option<String> {
         .next()
         .unwrap_or("")
         .to_string();
-    if v.contains('.') { Some(v) } else { None }
+    if v.contains('.') {
+        Some(v)
+    } else {
+        None
+    }
 }
 
 async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
@@ -36,6 +40,8 @@ async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
         .send()
         .await
         .with_context(|| format!("failed to fetch npm metadata for '{package}'"))?
+        .error_for_status()
+        .with_context(|| format!("'{package}' not found on npm registry"))?
         .json()
         .await
         .with_context(|| format!("failed to parse npm metadata for '{package}'"))
