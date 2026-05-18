@@ -47,12 +47,8 @@ pub async fn run(args: NewArgs) -> Result<()> {
     spinner.set_message("Resolving package versions…");
 
     let versions = match framework.as_str() {
-        "angular" => {
-            npm::resolve_for_framework("@m2s2/ng-lib", &["rxjs", "zone.js"]).await?
-        }
-        "react" => {
-            npm::resolve_for_framework("@m2s2/react-lib", &[]).await?
-        }
+        "angular" => npm::resolve_for_framework("@m2s2/ng-lib", &["rxjs", "zone.js"]).await?,
+        "react" => npm::resolve_for_framework("@m2s2/react-lib", &[]).await?,
         _ => Default::default(),
     };
 

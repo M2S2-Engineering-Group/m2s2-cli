@@ -26,7 +26,11 @@ fn extract_version(range: &str) -> Option<String> {
         .next()
         .unwrap_or("")
         .to_string();
-    if v.contains('.') { Some(v) } else { None }
+    if v.contains('.') {
+        Some(v)
+    } else {
+        None
+    }
 }
 
 async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
@@ -46,16 +50,25 @@ async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
 /// Uses the m2s2 library as the source of truth: its peer, regular, and dev
 /// dependencies determine compatible versions. Any packages still missing after
 /// that are fetched individually from npm.
-pub async fn resolve_for_framework(m2s2_lib: &str, supplemental: &[&str]) -> Result<Map<String, Value>> {
+pub async fn resolve_for_framework(
+    m2s2_lib: &str,
+    supplemental: &[&str],
+) -> Result<Map<String, Value>> {
     let client = Client::new();
     let meta = fetch_meta(&client, m2s2_lib).await?;
 
     let mut versions: Map<String, Value> = Map::new();
 
-    for dep_map in [&meta.peer_dependencies, &meta.dependencies, &meta.dev_dependencies] {
+    for dep_map in [
+        &meta.peer_dependencies,
+        &meta.dependencies,
+        &meta.dev_dependencies,
+    ] {
         for (pkg, range) in dep_map {
             if let Some(v) = range.as_str().and_then(extract_version) {
-                versions.entry(sanitize_key(pkg)).or_insert(Value::String(v));
+                versions
+                    .entry(sanitize_key(pkg))
+                    .or_insert(Value::String(v));
             }
         }
     }
@@ -63,7 +76,12 @@ pub async fn resolve_for_framework(m2s2_lib: &str, supplemental: &[&str]) -> Res
     // All @angular/* packages share the same version — fill in any not explicitly listed.
     let angular_version = ["_angular_core", "_angular_build", "_angular_cli"]
         .iter()
-        .find_map(|k| versions.get(*k).and_then(|v| v.as_str()).map(|s| s.to_string()));
+        .find_map(|k| {
+            versions
+                .get(*k)
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
 
     if let Some(ref av) = angular_version {
         for pkg in &[
