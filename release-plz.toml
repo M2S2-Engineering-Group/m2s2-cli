@@ -1,3 +1,8 @@
 [workspace]
 # Let cargo-dist own the GitHub Release; release-plz handles the tag + crates.io publish
 git_release_enable = false
+
+[[package]]
+name = "m2s2-cli"
+# No published version yet — diff against git history instead of crates.io
+publish_no_verify = false
