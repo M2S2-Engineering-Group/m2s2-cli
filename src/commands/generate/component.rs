@@ -26,8 +26,9 @@ pub async fn run(args: ComponentArgs) -> Result<()> {
 
     let framework = match args.framework {
         Some(f) => f,
-        None => detect_framework()
-            .context("could not detect framework — run from your project root or pass --framework")?,
+        None => detect_framework().context(
+            "could not detect framework — run from your project root or pass --framework",
+        )?,
     };
 
     let out_dir = match args.path {
@@ -54,7 +55,10 @@ pub async fn run(args: ComponentArgs) -> Result<()> {
     let files: &[(&str, &str)] = match framework.as_str() {
         "react" => &[
             ("generate/react/component.tsx.hbs", &format!("{pascal}.tsx")),
-            ("generate/react/component.scss.hbs", &format!("{pascal}.scss")),
+            (
+                "generate/react/component.scss.hbs",
+                &format!("{pascal}.scss"),
+            ),
             ("generate/react/index.ts.hbs", "index.ts"),
         ],
         _ => &[
@@ -78,8 +82,7 @@ pub async fn run(args: ComponentArgs) -> Result<()> {
             .with_context(|| format!("missing embedded template '{template_path}'"))?;
         let content = scaffold::render(&raw, &data)?;
         let out = out_dir.join(file_name);
-        fs::write(&out, content)
-            .with_context(|| format!("failed to write '{}'", out.display()))?;
+        fs::write(&out, content).with_context(|| format!("failed to write '{}'", out.display()))?;
         println!("  {} {}", style("create").green(), out.display());
     }
 
@@ -107,7 +110,7 @@ fn detect_framework() -> Option<String> {
 
 fn to_pascal_case(input: &str) -> String {
     input
-        .split(|c: char| c == '-' || c == '_' || c == ' ')
+        .split(['-', '_', ' '])
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {

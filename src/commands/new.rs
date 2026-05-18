@@ -73,7 +73,12 @@ pub async fn run(args: NewArgs) -> Result<()> {
     }
     println!(
         "  {}",
-        style(if framework == "react" { "npm run dev" } else { "npm start" }).dim()
+        style(if framework == "react" {
+            "npm run dev"
+        } else {
+            "npm start"
+        })
+        .dim()
     );
     println!();
 

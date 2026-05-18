@@ -61,10 +61,7 @@ pub async fn run(args: UpgradeArgs) -> Result<()> {
     println!("  Release notes: {}\n", style(&release.html_url).dim());
 
     if args.check {
-        println!(
-            "Run {} to install.",
-            style("m2s2 upgrade").cyan()
-        );
+        println!("Run {} to install.", style("m2s2 upgrade").cyan());
         return Ok(());
     }
 

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use handlebars::Handlebars;
 use rust_embed::Embed;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
 
@@ -51,7 +51,10 @@ pub fn run(ctx: &ScaffoldContext) -> Result<()> {
             (stem.to_string(), true)
         } else if let Some(stem) = relative.strip_prefix('_') {
             // _gitignore → .gitignore
-            let dir = Path::new(relative).parent().map(|p| p.to_str().unwrap_or("")).unwrap_or("");
+            let dir = Path::new(relative)
+                .parent()
+                .map(|p| p.to_str().unwrap_or(""))
+                .unwrap_or("");
             let out = if dir.is_empty() {
                 format!(".{stem}")
             } else {
