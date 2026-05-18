@@ -26,13 +26,17 @@ pub fn render(raw: &str, data: &Value) -> Result<String> {
 pub struct ScaffoldContext {
     pub name: String,
     pub framework: String,
+    pub versions: serde_json::Map<String, Value>,
 }
 
 pub fn run(ctx: &ScaffoldContext) -> Result<()> {
     let mut hbs = Handlebars::new();
     hbs.set_strict_mode(true);
 
-    let data = json!({ "name": ctx.name });
+    let mut data = json!({ "name": ctx.name });
+    for (k, v) in &ctx.versions {
+        data[k] = v.clone();
+    }
     let prefix = format!("{}/", ctx.framework);
     let target = Path::new(&ctx.name);
 

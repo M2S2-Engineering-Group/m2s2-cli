@@ -1,3 +1,4 @@
+use crate::npm;
 use crate::scaffold::{self, ScaffoldContext};
 use anyhow::Result;
 use clap::Args;
@@ -43,11 +44,24 @@ pub async fn run(args: NewArgs) -> Result<()> {
             .template("{spinner} {msg}")?,
     );
     spinner.enable_steady_tick(Duration::from_millis(80));
+    spinner.set_message("Resolving package versions…");
+
+    let versions = match framework.as_str() {
+        "angular" => {
+            npm::resolve_for_framework("@m2s2/ng-lib", &["rxjs", "zone.js"]).await?
+        }
+        "react" => {
+            npm::resolve_for_framework("@m2s2/react-lib", &[]).await?
+        }
+        _ => Default::default(),
+    };
+
     spinner.set_message("Writing project files…");
 
     scaffold::run(&ScaffoldContext {
         name: args.name.clone(),
         framework: framework.clone(),
+        versions,
     })?;
 
     if !args.skip_install {

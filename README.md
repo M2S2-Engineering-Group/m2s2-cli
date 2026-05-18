@@ -1,5 +1,7 @@
 # m2s2-cli
 
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/mgmaster24?style=flat&logo=githubsponsors&label=Sponsor)](https://github.com/sponsors/mgmaster24)
+
 The official CLI for scaffolding and working with [M²S²](https://github.com/M2S2-Engineering-Group) design system projects. Create new React or Angular applications pre-wired with M²S² components, generate components, and keep your installation up to date — all from the terminal.
 
 ## Table of Contents

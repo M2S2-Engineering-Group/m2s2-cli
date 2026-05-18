@@ -1,4 +1,5 @@
 mod commands;
+mod npm;
 mod scaffold;
 
 use anyhow::Result;
