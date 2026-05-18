@@ -1,0 +1,3 @@
+[workspace]
+# Let cargo-dist own the GitHub Release; release-plz handles the tag + crates.io publish
+git_release_enable = false
