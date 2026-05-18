@@ -1,0 +1,26 @@
+import { Navbar, Footer } from '@m2s2/react-lib';
+import type { NavbarConfig, FooterConfig } from '@m2s2/react-lib';
+
+const navbar: NavbarConfig = {
+  brand: '{{name}}',
+  brandPath: '/',
+  isFixed: true,
+  buttons: [],
+};
+
+const footer: FooterConfig = {
+  brandName: '{{name}}',
+  links: [],
+};
+
+export default function App() {
+  return (
+    <>
+      <Navbar config={navbar} />
+      <main className="app-main">
+        <h1>Welcome to {{name}}</h1>
+      </main>
+      <Footer config={footer} />
+    </>
+  );
+}

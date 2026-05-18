@@ -1,0 +1,21 @@
+name: Release-plz
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release-plz:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: release-plz/action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

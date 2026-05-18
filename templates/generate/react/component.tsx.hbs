@@ -1,0 +1,14 @@
+import './{{name}}.scss';
+
+interface {{name}}Props {
+  children?: React.ReactNode;
+  className?: string;
+}
+
+export function {{name}}({ children, className }: {{name}}Props) {
+  return (
+    <div className={['{{selector}}', className].filter(Boolean).join(' ')}>
+      {children}
+    </div>
+  );
+}

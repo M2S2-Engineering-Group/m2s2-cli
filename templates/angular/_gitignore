@@ -1,0 +1,20 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+out-tsc
+
+# Angular cache
+.angular
+
+# Local env
+.env
+.env.local
+
+# Editor
+.vscode
+.idea
+
+# OS
+.DS_Store

@@ -1,0 +1,26 @@
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { NavbarComponent, FooterComponent } from '@m2s2/ng-lib';
+import { NgNavbarConfig } from '@m2s2/ng-lib';
+import { FooterConfig } from '@m2s2/ng-lib';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.scss',
+  standalone: true,
+  imports: [RouterOutlet, NavbarComponent, FooterComponent],
+})
+export class AppComponent {
+  readonly navbarConfig: NgNavbarConfig = {
+    brand: '{{name}}',
+    brandRouterOutlet: '/',
+    isFixed: true,
+    buttons: [],
+  };
+
+  readonly footerConfig: FooterConfig = {
+    brandName: '{{name}}',
+    links: [],
+  };
+}

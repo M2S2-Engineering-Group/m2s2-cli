@@ -1,0 +1,17 @@
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router';
+import { M2S2Provider } from '@m2s2/react-lib';
+import '@m2s2/react-lib/styles';
+import App from './App';
+import './App.scss';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <M2S2Provider>
+        <App />
+      </M2S2Provider>
+    </BrowserRouter>
+  </StrictMode>
+);
