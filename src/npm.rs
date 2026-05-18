@@ -26,11 +26,7 @@ fn extract_version(range: &str) -> Option<String> {
         .next()
         .unwrap_or("")
         .to_string();
-    if v.contains('.') {
-        Some(v)
-    } else {
-        None
-    }
+    if v.contains('.') { Some(v) } else { None }
 }
 
 async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
