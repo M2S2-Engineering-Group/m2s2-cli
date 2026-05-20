@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.3...v0.1.4) - 2026-05-20
+
+### Added
+
+- add vue templates and project creation
+
+### Other
+
+- formatting 2
+- formatting
+
 ## [0.1.3](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.2...v0.1.3) - 2026-05-19
 
 ### Other
