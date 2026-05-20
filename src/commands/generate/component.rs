@@ -1,5 +1,5 @@
 use crate::scaffold;
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::Args;
 use console::style;
 use serde_json::json;
@@ -63,10 +63,7 @@ pub async fn run(args: ComponentArgs) -> Result<()> {
         ],
         "vue" => &[
             ("generate/vue/component.vue.hbs", &format!("{pascal}.vue")),
-            (
-                "generate/vue/component.scss.hbs",
-                &format!("{pascal}.scss"),
-            ),
+            ("generate/vue/component.scss.hbs", &format!("{pascal}.scss")),
             ("generate/vue/index.ts.hbs", "index.ts"),
         ],
         _ => &[
