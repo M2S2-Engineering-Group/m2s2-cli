@@ -1,0 +1,24 @@
+<script setup lang="ts">
+import { Navbar, Footer } from '@m2s2/vue-lib';
+import type { NavbarConfig, FooterConfig } from '@m2s2/vue-lib';
+
+const navbar: NavbarConfig = {
+  brand: '{{name}}',
+  brandPath: '/',
+  isFixed: true,
+  buttons: [],
+};
+
+const footer: FooterConfig = {
+  brandName: '{{name}}',
+  links: [],
+};
+</script>
+
+<template>
+  <Navbar :config="navbar" />
+  <main class="app-main">
+    <h1>Welcome to {{name}}</h1>
+  </main>
+  <Footer :config="footer" />
+</template>

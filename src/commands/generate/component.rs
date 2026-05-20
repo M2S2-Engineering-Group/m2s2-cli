@@ -11,7 +11,7 @@ pub struct ComponentArgs {
     pub name: String,
 
     /// Framework to target; detected from package.json if omitted
-    #[arg(long, value_parser = ["react", "angular"])]
+    #[arg(long, value_parser = ["react", "angular", "vue"])]
     pub framework: Option<String>,
 
     /// Output directory (default: src/components/<Name> for React,
@@ -34,7 +34,7 @@ pub async fn run(args: ComponentArgs) -> Result<()> {
     let out_dir = match args.path {
         Some(ref p) => Path::new(p).join(&pascal),
         None => match framework.as_str() {
-            "react" => Path::new("src/components").join(&pascal),
+            "react" | "vue" => Path::new("src/components").join(&pascal),
             _ => Path::new("src/app/components").join(&kebab),
         },
     };
@@ -60,6 +60,14 @@ pub async fn run(args: ComponentArgs) -> Result<()> {
                 &format!("{pascal}.scss"),
             ),
             ("generate/react/index.ts.hbs", "index.ts"),
+        ],
+        "vue" => &[
+            ("generate/vue/component.vue.hbs", &format!("{pascal}.vue")),
+            (
+                "generate/vue/component.scss.hbs",
+                &format!("{pascal}.scss"),
+            ),
+            ("generate/vue/index.ts.hbs", "index.ts"),
         ],
         _ => &[
             (
@@ -103,6 +111,8 @@ fn detect_framework() -> Option<String> {
         Some("react".into())
     } else if deps.get("@m2s2/ng-lib").is_some() {
         Some("angular".into())
+    } else if deps.get("@m2s2/vue-lib").is_some() {
+        Some("vue".into())
     } else {
         None
     }

@@ -13,8 +13,8 @@ pub struct NewArgs {
     /// Project name
     pub name: String,
 
-    /// Framework to scaffold (react or angular)
-    #[arg(long, value_parser = ["react", "angular"])]
+    /// Framework to scaffold (react, angular, or vue)
+    #[arg(long, value_parser = ["react", "angular", "vue"])]
     pub framework: Option<String>,
 
     /// Skip running npm install after scaffolding
@@ -25,7 +25,7 @@ pub struct NewArgs {
 pub async fn run(args: NewArgs) -> Result<()> {
     let framework = match args.framework {
         Some(f) => f,
-        None => Select::new("Which framework?", vec!["react", "angular"])
+        None => Select::new("Which framework?", vec!["react", "angular", "vue"])
             .prompt()
             .map(|s| s.to_string())?,
     };
@@ -64,6 +64,13 @@ pub async fn run(args: NewArgs) -> Result<()> {
             )
             .await?
         }
+        "vue" => {
+            npm::resolve_for_framework(
+                "@m2s2/vue-lib",
+                &["typescript", "vite", "@vitejs/plugin-vue", "vue-tsc"],
+            )
+            .await?
+        }
         _ => Default::default(),
     };
 
@@ -98,10 +105,10 @@ pub async fn run(args: NewArgs) -> Result<()> {
     }
     println!(
         "  {}",
-        style(if framework == "react" {
-            "npm run dev"
-        } else {
+        style(if framework == "angular" {
             "npm start"
+        } else {
+            "npm run dev"
         })
         .dim()
     );

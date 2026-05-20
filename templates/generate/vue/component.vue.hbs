@@ -1,0 +1,15 @@
+<script setup lang="ts">
+withDefaults(defineProps<{
+  className?: string;
+}>(), {});
+</script>
+
+<template>
+  <div :class="['{{selector}}', className]">
+    <slot />
+  </div>
+</template>
+
+<style lang="scss" scoped>
+@use './{{name}}.scss';
+</style>
