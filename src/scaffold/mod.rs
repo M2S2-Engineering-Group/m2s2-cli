@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use handlebars::Handlebars;
 use rust_embed::Embed;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
 
