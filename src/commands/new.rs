@@ -60,6 +60,7 @@ pub async fn run(args: NewArgs) -> Result<()> {
                     "@types/react",
                     "@types/react-dom",
                     "@vitejs/plugin-react",
+                    "sass-embedded",
                 ],
             )
             .await?
@@ -67,7 +68,13 @@ pub async fn run(args: NewArgs) -> Result<()> {
         "vue" => {
             npm::resolve_for_framework(
                 "@m2s2/vue-lib",
-                &["typescript", "vite", "@vitejs/plugin-vue", "vue-tsc"],
+                &[
+                    "typescript",
+                    "vite",
+                    "@vitejs/plugin-vue",
+                    "vue-tsc",
+                    "sass-embedded",
+                ],
             )
             .await?
         }
