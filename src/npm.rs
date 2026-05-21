@@ -29,6 +29,61 @@ fn extract_version(range: &str) -> Option<String> {
     if v.contains('.') { Some(v) } else { None }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_scoped_package() {
+        assert_eq!(sanitize_key("@m2s2/react-lib"), "_m2s2_react_lib");
+    }
+
+    #[test]
+    fn sanitize_types_package() {
+        assert_eq!(sanitize_key("@types/react"), "_types_react");
+    }
+
+    #[test]
+    fn sanitize_plain_package() {
+        assert_eq!(sanitize_key("typescript"), "typescript");
+    }
+
+    #[test]
+    fn sanitize_hyphenated_package() {
+        assert_eq!(sanitize_key("sass-embedded"), "sass_embedded");
+    }
+
+    #[test]
+    fn extract_caret_range() {
+        assert_eq!(extract_version("^18.3.1"), Some("18.3.1".into()));
+    }
+
+    #[test]
+    fn extract_tilde_range() {
+        assert_eq!(extract_version("~5.9.3"), Some("5.9.3".into()));
+    }
+
+    #[test]
+    fn extract_gte_range() {
+        assert_eq!(extract_version(">=3.0.0"), Some("3.0.0".into()));
+    }
+
+    #[test]
+    fn extract_exact_version() {
+        assert_eq!(extract_version("1.2.3"), Some("1.2.3".into()));
+    }
+
+    #[test]
+    fn extract_invalid_returns_none() {
+        assert_eq!(extract_version("latest"), None);
+    }
+
+    #[test]
+    fn extract_star_returns_none() {
+        assert_eq!(extract_version("*"), None);
+    }
+}
+
 async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
     let url = format!("https://registry.npmjs.org/{}/latest", package);
     client

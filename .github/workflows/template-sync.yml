@@ -21,9 +21,11 @@ jobs:
         run: |
           REACT_LIB=$(npm view @m2s2/react-lib version 2>/dev/null || echo "")
           NG_LIB=$(npm view @m2s2/ng-lib version 2>/dev/null || echo "")
+          VUE_LIB=$(npm view @m2s2/vue-lib version 2>/dev/null || echo "")
           TOKENS=$(npm view @m2s2/tokens version 2>/dev/null || echo "")
           echo "react_lib=$REACT_LIB" >> "$GITHUB_OUTPUT"
           echo "ng_lib=$NG_LIB" >> "$GITHUB_OUTPUT"
+          echo "vue_lib=$VUE_LIB" >> "$GITHUB_OUTPUT"
           echo "tokens=$TOKENS" >> "$GITHUB_OUTPUT"
 
       - name: Update react template
@@ -38,12 +40,19 @@ jobs:
           VERSION="${{ steps.versions.outputs.ng_lib }}"
           sed -i "s|\"@m2s2/ng-lib\": \"[^\"]*\"|\"@m2s2/ng-lib\": \"^$VERSION\"|g" templates/angular/package.json.hbs
 
-      - name: Update tokens in both templates
+      - name: Update vue template
+        if: ${{ steps.versions.outputs.vue_lib != '' }}
+        run: |
+          VERSION="${{ steps.versions.outputs.vue_lib }}"
+          sed -i "s|\"@m2s2/vue-lib\": \"[^\"]*\"|\"@m2s2/vue-lib\": \"^$VERSION\"|g" templates/vue/package.json.hbs
+
+      - name: Update tokens in all templates
         if: ${{ steps.versions.outputs.tokens != '' }}
         run: |
           VERSION="${{ steps.versions.outputs.tokens }}"
           sed -i "s|\"@m2s2/tokens\": \"[^\"]*\"|\"@m2s2/tokens\": \"^$VERSION\"|g" templates/react/package.json.hbs
           sed -i "s|\"@m2s2/tokens\": \"[^\"]*\"|\"@m2s2/tokens\": \"^$VERSION\"|g" templates/angular/package.json.hbs
+          sed -i "s|\"@m2s2/tokens\": \"[^\"]*\"|\"@m2s2/tokens\": \"^$VERSION\"|g" templates/vue/package.json.hbs
 
       - name: Check for changes
         id: diff
@@ -58,6 +67,10 @@ jobs:
         if: ${{ steps.diff.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REACT_VERSION: ${{ steps.versions.outputs.react_lib }}
+          NG_VERSION: ${{ steps.versions.outputs.ng_lib }}
+          VUE_VERSION: ${{ steps.versions.outputs.vue_lib }}
+          TOKENS_VERSION: ${{ steps.versions.outputs.tokens }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -66,13 +79,17 @@ jobs:
           git add templates/
           git commit -m "chore: sync template dependencies to latest @m2s2 releases"
           git push origin "$BRANCH"
+          cat > /tmp/pr-body.md << EOF
+          Automated update of \`@m2s2\` package versions in scaffold templates.
+
+          | Package | Version |
+          |---------|---------|
+          | \`@m2s2/react-lib\` | \`$REACT_VERSION\` |
+          | \`@m2s2/ng-lib\` | \`$NG_VERSION\` |
+          | \`@m2s2/vue-lib\` | \`$VUE_VERSION\` |
+          | \`@m2s2/tokens\` | \`$TOKENS_VERSION\` |
+          EOF
           gh pr create \
             --title "chore: sync template dependencies" \
-            --body "Automated update of \`@m2s2\` package versions in scaffold templates.
-
-  | Package | Version |
-  |---------|---------|
-  | \`@m2s2/react-lib\` | \`${{ steps.versions.outputs.react_lib }}\` |
-  | \`@m2s2/ng-lib\` | \`${{ steps.versions.outputs.ng_lib }}\` |
-  | \`@m2s2/tokens\` | \`${{ steps.versions.outputs.tokens }}\` |" \
+            --body-file /tmp/pr-body.md \
             --label "dependencies"
