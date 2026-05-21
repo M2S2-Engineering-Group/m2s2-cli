@@ -1,24 +1,77 @@
 <script setup lang="ts">
-import { Navbar, Footer } from '@m2s2/vue-lib';
-import type { NavbarConfig, FooterConfig } from '@m2s2/vue-lib';
+import {
+  Navbar,
+  Footer,
+  PageHeader,
+  FeatureCard,
+  CtaSection,
+} from '@m2s2/vue-lib';
+import type {
+  NavbarConfig,
+  FooterConfig,
+  PageHeaderConfig,
+  FeatureCardConfig,
+  CtaConfig,
+} from '@m2s2/vue-lib';
 
 const navbar: NavbarConfig = {
   brand: '{{name}}',
   brandPath: '/',
   isFixed: true,
-  buttons: [],
+  buttons: [
+    { id: 'home',    title: 'Home',    href: '/' },
+    { id: 'about',   title: 'About',   href: '/about' },
+    { id: 'contact', title: 'Contact', href: '/contact' },
+  ],
+};
+
+const hero: PageHeaderConfig = {
+  title: 'Welcome to {{name}}',
+  subtitle: 'Built with the M²S² design system — start building something great.',
+};
+
+const features: FeatureCardConfig[] = [
+  {
+    icon: '🎨',
+    title: 'Design Tokens',
+    body: 'Consistent colours, spacing, and typography powered by @m2s2/tokens.',
+  },
+  {
+    icon: '⚡',
+    title: 'Ready-made Components',
+    body: 'Production-quality UI components wired up and ready to use out of the box.',
+    featured: true,
+  },
+  {
+    icon: '🚀',
+    title: 'Fast by Default',
+    body: 'Vite-powered dev server with hot module replacement for instant feedback.',
+  },
+];
+
+const cta: CtaConfig = {
+  title: 'Ready to build?',
+  body: 'Open src/App.vue and start replacing this content with your own.',
+  label: 'View the docs',
+  route: 'https://github.com/M2S2-Engineering-Group',
 };
 
 const footer: FooterConfig = {
   brandName: '{{name}}',
-  links: [],
+  links: [
+    { type: 'github', href: 'https://github.com/M2S2-Engineering-Group' },
+  ],
 };
 </script>
 
 <template>
   <Navbar :config="navbar" />
   <main class="app-main">
-    <h1>Welcome to {{name}}</h1>
+    <PageHeader :config="hero" />
+    <section class="features">
+      <FeatureCard v-for="f in features" :key="f.title" :config="f" />
+    </section>
+    <CtaSection :config="cta" />
   </main>
   <Footer :config="footer" />
 </template>

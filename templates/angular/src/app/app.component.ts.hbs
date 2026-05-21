@@ -1,26 +1,68 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { NavbarComponent, FooterComponent } from '@m2s2/ng-lib';
-import { NgNavbarConfig } from '@m2s2/ng-lib';
-import { FooterConfig } from '@m2s2/ng-lib';
+import {
+  NavbarComponent,
+  FooterComponent,
+  PageHeaderComponent,
+  FeatureCardComponent,
+  CtaSectionComponent,
+} from '@m2s2/ng-lib';
+import { NgNavbarConfig, FooterConfig, PageHeaderConfig, FeatureCardConfig, CtaConfig } from '@m2s2/ng-lib';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   standalone: true,
-  imports: [RouterOutlet, NavbarComponent, FooterComponent],
+  imports: [RouterOutlet, NavbarComponent, FooterComponent, PageHeaderComponent, FeatureCardComponent, CtaSectionComponent],
 })
 export class AppComponent {
   readonly navbarConfig: NgNavbarConfig = {
     brand: '{{name}}',
     brandRouterOutlet: '/',
     isFixed: true,
-    buttons: [],
+    buttons: [
+      { id: 'home',    title: 'Home',    routerLink: '/' },
+      { id: 'about',   title: 'About',   routerLink: '/about' },
+      { id: 'contact', title: 'Contact', routerLink: '/contact' },
+    ],
+  };
+
+  readonly hero: PageHeaderConfig = {
+    title: 'Welcome to {{name}}',
+    subtitle: 'Built with the M²S² design system — start building something great.',
+  };
+
+  readonly features: FeatureCardConfig[] = [
+    {
+      icon: '🎨',
+      title: 'Design Tokens',
+      body: 'Consistent colours, spacing, and typography powered by @m2s2/tokens.',
+    },
+    {
+      icon: '⚡',
+      title: 'Ready-made Components',
+      body: 'Production-quality UI components wired up and ready to use out of the box.',
+      featured: true,
+    },
+    {
+      icon: '🚀',
+      title: 'Fast by Default',
+      body: 'Angular build tooling with optimised production bundles out of the box.',
+    },
+  ];
+
+  readonly cta: CtaConfig = {
+    title: 'Ready to build?',
+    body: 'Open src/app/app.component.ts and start replacing this content with your own.',
+    label: 'View the docs',
+    route: 'https://github.com/M2S2-Engineering-Group',
   };
 
   readonly footerConfig: FooterConfig = {
     brandName: '{{name}}',
-    links: [],
+    links: [
+      { type: 'github', href: 'https://github.com/M2S2-Engineering-Group' },
+    ],
   };
 }
