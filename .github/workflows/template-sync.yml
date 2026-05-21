@@ -77,7 +77,7 @@ jobs:
           BRANCH="chore/sync-template-deps-$(date +%Y%m%d)"
           git checkout -b "$BRANCH"
           git add templates/
-          git commit -m "chore: sync template dependencies to latest @m2s2 releases"
+          git commit -m "fix: sync template dependencies to latest @m2s2 releases"
           git push origin "$BRANCH"
           cat > /tmp/pr-body.md << EOF
           Automated update of \`@m2s2\` package versions in scaffold templates.
@@ -89,6 +89,7 @@ jobs:
           | \`@m2s2/vue-lib\` | \`$VUE_VERSION\` |
           | \`@m2s2/tokens\` | \`$TOKENS_VERSION\` |
           EOF
+          gh label create "dependencies" --color "0075ca" --description "Dependency version updates" 2>/dev/null || true
           gh pr create \
             --title "chore: sync template dependencies" \
             --body-file /tmp/pr-body.md \
