@@ -1,5 +1,4 @@
 import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
 import {
   NavbarComponent,
   FooterComponent,
@@ -14,7 +13,7 @@ import { NgNavbarConfig, FooterConfig, PageHeaderConfig, FeatureCardConfig, CtaC
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   standalone: true,
-  imports: [RouterOutlet, NavbarComponent, FooterComponent, PageHeaderComponent, FeatureCardComponent, CtaSectionComponent],
+  imports: [NavbarComponent, FooterComponent, PageHeaderComponent, FeatureCardComponent, CtaSectionComponent],
 })
 export class AppComponent {
   readonly navbarConfig: NgNavbarConfig = {

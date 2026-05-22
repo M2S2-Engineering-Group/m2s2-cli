@@ -1,11 +1,10 @@
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { M2S2_AUTH_PROVIDER } from '@m2s2/ng-lib';
 import { routes } from './app.routes';
 
-// Implement M2S2AuthProvider with your auth library (e.g. AWS Amplify, Auth0, Firebase).
-// See: https://github.com/M2S2-Engineering-Group/m2s2-design-system#authentication
+// To enable auth-aware navbar items, implement M2S2AuthProvider and provide it:
+// import { M2S2_AUTH_PROVIDER } from '@m2s2/ng-lib';
 // import { MyAuthProvider } from './auth/my-auth.provider';
 
 export const appConfig: ApplicationConfig = {
