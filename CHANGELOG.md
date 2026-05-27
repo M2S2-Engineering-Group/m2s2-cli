@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.13...v0.1.14) - 2026-05-27
+
+### Fixed
+
+- publish semantics
+
 ## [0.1.13](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.12...v0.1.13) - 2026-05-27
 
 ### Fixed
