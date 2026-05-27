@@ -15,3 +15,5 @@ npm-package = "@m2s2/cli"
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Only run dist on tag pushes, not PRs
 pr-run-mode = "plan"
+# Allow manual edits to the generated CI file
+allow-dirty = ["ci"]
