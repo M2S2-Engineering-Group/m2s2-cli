@@ -12,9 +12,16 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      pull-requests: write
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Get latest npm versions
         id: versions
@@ -63,34 +70,11 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open PR
+      - name: Commit to main
         if: ${{ steps.diff.outputs.changed == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REACT_VERSION: ${{ steps.versions.outputs.react_lib }}
-          NG_VERSION: ${{ steps.versions.outputs.ng_lib }}
-          VUE_VERSION: ${{ steps.versions.outputs.vue_lib }}
-          TOKENS_VERSION: ${{ steps.versions.outputs.tokens }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          BRANCH="chore/sync-template-deps-$(date +%Y%m%d)"
-          git checkout -b "$BRANCH"
           git add templates/
           git commit -m "fix: sync template dependencies to latest @m2s2 releases"
-          git push origin "$BRANCH"
-          cat > /tmp/pr-body.md << EOF
-          Automated update of \`@m2s2\` package versions in scaffold templates.
-
-          | Package | Version |
-          |---------|---------|
-          | \`@m2s2/react-lib\` | \`$REACT_VERSION\` |
-          | \`@m2s2/ng-lib\` | \`$NG_VERSION\` |
-          | \`@m2s2/vue-lib\` | \`$VUE_VERSION\` |
-          | \`@m2s2/tokens\` | \`$TOKENS_VERSION\` |
-          EOF
-          gh label create "dependencies" --color "0075ca" --description "Dependency version updates" 2>/dev/null || true
-          gh pr create \
-            --title "chore: sync template dependencies" \
-            --body-file /tmp/pr-body.md \
-            --label "dependencies"
+          git push https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ github.repository }} main
