@@ -1,22 +1,7 @@
 [workspace]
-# Let cargo-dist own the GitHub Release; release-plz handles the tag + crates.io publish
 git_release_enable = false
+changelog_config = "cliff.toml"
 
 [[package]]
 name = "m2s2-cli"
 publish_no_verify = false
-
-# Only feat/fix/perf trigger a release — chore, ci, docs, style, refactor, test do not
-[workspace.changelog]
-commit_parsers = [
-  { message = "^feat!|BREAKING CHANGE", group = "Breaking Changes" },
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^chore|^ci|^docs|^style|^refactor|^test|^build", skip = true },
-]
-
-[workspace.changelog.bump]
-features_always_bump_minor = true
-breaking_always_bump_major = true
-custom_patch_increment_regex = "^(fix|perf)"
