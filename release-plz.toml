@@ -4,4 +4,4 @@ changelog_config = "cliff.toml"
 
 [[package]]
 name = "m2s2-cli"
-publish_no_verify = false
+publish = false
