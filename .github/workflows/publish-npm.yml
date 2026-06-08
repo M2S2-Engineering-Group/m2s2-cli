@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Resolve tag
         id: tag
@@ -30,6 +31,4 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to npm
-        run: npm publish ./artifacts/*-npm-package.tar.gz --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish ./artifacts/*-npm-package.tar.gz --access public --provenance
