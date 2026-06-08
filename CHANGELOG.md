@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.16...v0.1.17) - 2026-06-08
+
+### Fixed
+
+- sync template dependencies to latest @m2s2 releases
+- sync template dependencies to latest @m2s2 releases
+
+### Other
+
+- chore
+
 ## [0.1.16](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.15...v0.1.16) - 2026-06-06
 
 ### Fixed
