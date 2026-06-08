@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.19](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.18...v0.1.19) - 2026-06-08
+
+### Other
+
+- remove resgistry-url to allow use of OIDC
+
 ## [0.1.18](https://github.com/M2S2-Engineering-Group/m2s2-cli/compare/v0.1.17...v0.1.18) - 2026-06-08
 
 ### Other
