@@ -375,18 +375,20 @@ Runs on every push to `main` and every pull request.
 
 ### Release (`release-plz.yml` + `release.yml`)
 
-Releases are fully automated from conventional commits — no manual tagging required.
+Releases are fully automated from conventional commits — no PRs, no manual tagging required.
 
-1. **Merge to `main`** — `release-plz` reads conventional commit history and opens a Release PR with a bumped version and generated CHANGELOG.
-2. **Merge the Release PR** — `release-plz` pushes the version tag and publishes the crate to **crates.io**.
-3. **Tag push** — `release.yml` (cargo-dist) triggers and builds platform binaries in parallel:
+1. **CI passes on `main`** — `release-plz.yml` triggers only after the `CI` workflow succeeds.
+2. **Version bump** — `release-plz update` reads conventional commit history, bumps `Cargo.toml`, and updates `CHANGELOG.md`. Only `feat`, `fix`, and `perf` commits trigger a bump; `chore`, `docs`, `refactor`, and others are skipped.
+3. **Tag pushed** — the bump is committed directly to `main` and a `vX.Y.Z` tag is pushed.
+4. **`release.yml` (cargo-dist) triggers** — builds platform binaries in parallel:
    - `aarch64-apple-darwin`
    - `x86_64-apple-darwin`
    - `aarch64-unknown-linux-gnu`
    - `x86_64-unknown-linux-gnu`
    - `x86_64-pc-windows-msvc`
-4. **GitHub Release created** — all binaries, checksums, shell installer, and PowerShell installer are attached.
-5. **`publish-npm.yml` triggers** — publishes `@m2s2/cli` to npm.
+5. **GitHub Release created** — all binaries, checksums, shell installer, and PowerShell installer are attached.
+6. **`publish-npm.yml` triggers** — publishes `@m2s2/cli` to npm.
+7. **`publish-crates.yml` triggers** — publishes `m2s2-cli` to crates.io.
 
 ### Template Sync (`template-sync.yml`)
 
@@ -405,7 +407,7 @@ When a version change is detected, the workflow opens a pull request updating th
 | `APP_ID` | `release-plz.yml` | GitHub App ID for bypassing branch protection on release commits. |
 | `APP_PRIVATE_KEY` | `release-plz.yml` | GitHub App private key. |
 | `NPM_TOKEN` | `publish-npm.yml` | npm access token with publish rights to the `@m2s2` scope. |
-| `CARGO_REGISTRY_TOKEN` | `release-plz.yml` | crates.io API token for publishing `m2s2-cli`. |
+| `CARGO_REGISTRY_TOKEN` | `publish-crates.yml` | crates.io API token for publishing `m2s2-cli`. |
 
 ---
 
