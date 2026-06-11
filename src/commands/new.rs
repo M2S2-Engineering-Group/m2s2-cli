@@ -1,3 +1,4 @@
+use crate::config::M2S2Config;
 use crate::npm;
 use crate::scaffold::{self, ScaffoldContext};
 use anyhow::Result;
@@ -88,6 +89,11 @@ pub async fn run(args: NewArgs) -> Result<()> {
         framework: framework.clone(),
         versions,
     })?;
+
+    let prev = std::env::current_dir()?;
+    std::env::set_current_dir(&args.name)?;
+    let _ = M2S2Config { framework: Some(framework.clone()) }.save();
+    std::env::set_current_dir(prev)?;
 
     if !args.skip_install {
         spinner.set_message("Running npm install…");

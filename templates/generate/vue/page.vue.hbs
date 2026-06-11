@@ -1,0 +1,12 @@
+<script setup lang="ts">
+defineProps<{ className?: string }>();
+</script>
+
+<template>
+  <main :class="['{{selector}}-page', className]">
+  </main>
+</template>
+
+<style lang="scss" scoped>
+@use './{{name}}Page.scss';
+</style>

@@ -1,4 +1,6 @@
 pub mod component;
+pub mod page;
+pub mod service;
 
 use clap::{Args, Subcommand};
 
@@ -12,4 +14,8 @@ pub struct GenerateArgs {
 pub enum GenerateCommands {
     /// Scaffold a new component
     Component(component::ComponentArgs),
+    /// Scaffold a new page (route-level component)
+    Page(page::PageArgs),
+    /// Scaffold a new service (Angular only)
+    Service(service::ServiceArgs),
 }

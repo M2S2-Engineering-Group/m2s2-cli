@@ -1,6 +1,8 @@
 mod commands;
+mod config;
 mod npm;
 mod scaffold;
+mod utils;
 
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser, Subcommand};
@@ -49,6 +51,12 @@ async fn main() -> Result<()> {
         Commands::Generate(args) => match args.command {
             commands::generate::GenerateCommands::Component(a) => {
                 commands::generate::component::run(a).await
+            }
+            commands::generate::GenerateCommands::Page(a) => {
+                commands::generate::page::run(a).await
+            }
+            commands::generate::GenerateCommands::Service(a) => {
+                commands::generate::service::run(a).await
             }
         },
         Commands::Upgrade(args) => commands::upgrade::run(args).await,

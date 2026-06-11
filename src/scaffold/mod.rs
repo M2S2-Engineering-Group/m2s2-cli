@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use console::style;
 use handlebars::Handlebars;
 use rust_embed::Embed;
 use serde_json::{Value, json};
@@ -21,6 +22,22 @@ pub fn render(raw: &str, data: &Value) -> Result<String> {
     let mut hbs = Handlebars::new();
     hbs.set_strict_mode(true);
     hbs.render_template(raw, data).map_err(Into::into)
+}
+
+/// Render and write a set of template files into `out_dir`, printing each created path.
+///
+/// `files` is a slice of `(template_path, output_filename)` pairs.
+pub fn write_files(out_dir: &Path, files: &[(&str, &str)], data: &Value) -> Result<()> {
+    for (template_path, file_name) in files {
+        let raw = get_template(template_path)
+            .with_context(|| format!("missing embedded template '{template_path}'"))?;
+        let content = render(&raw, data)?;
+        let out = out_dir.join(file_name);
+        fs::write(&out, content)
+            .with_context(|| format!("failed to write '{}'", out.display()))?;
+        println!("  {} {}", style("create").green(), out.display());
+    }
+    Ok(())
 }
 
 pub struct ScaffoldContext {

@@ -1,0 +1,10 @@
+interface {{name}}PageProps {
+  className?: string;
+}
+
+export function {{name}}Page({ className }: {{name}}PageProps) {
+  return (
+    <main className={['{{selector}}-page', className].filter(Boolean).join(' ')}>
+    </main>
+  );
+}
