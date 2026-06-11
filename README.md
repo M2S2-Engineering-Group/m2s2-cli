@@ -10,6 +10,8 @@ The official CLI for scaffolding and working with [M²S²](https://github.com/M2
 - [Commands](#commands)
   - [new](#m2s2-new)
   - [generate component](#m2s2-generate-component)
+  - [generate page](#m2s2-generate-page)
+  - [generate service](#m2s2-generate-service)
   - [upgrade](#m2s2-upgrade)
   - [completions](#m2s2-completions)
 - [Building from Source](#building-from-source)
@@ -216,6 +218,107 @@ src/components/HeroSection/
 
 ---
 
+### `m2s2 generate page`
+
+Scaffold a new route page inside an existing M²S² project.
+
+```bash
+m2s2 generate page <name> [OPTIONS]
+```
+
+Run this from your project root. Framework is auto-detected from `package.json` or `.m2s2.json`.
+
+**Arguments**
+
+| Argument | Description |
+|----------|-------------|
+| `<name>` | Page name. Accepts any casing — `UserProfile`, `user-profile`, and `userProfile` all produce the same output. |
+
+**Options**
+
+| Flag | Description |
+|------|-------------|
+| `--framework <react\|angular\|vue>` | Override framework detection. |
+| `--path <dir>` | Override the output directory. |
+
+**Examples**
+
+```bash
+m2s2 generate page UserProfile
+m2s2 generate page user-profile --framework angular
+m2s2 generate page Dashboard --path src/views
+```
+
+**What gets generated**
+
+*React* — written to `src/pages/<Name>/`
+```
+src/pages/UserProfile/
+├── UserProfilePage.tsx   # Typed props, BEM className
+├── UserProfilePage.scss  # Scoped class stub
+└── index.ts              # Barrel re-export
+```
+
+*Angular* — written to `src/app/pages/<name>/`
+```
+src/app/pages/user-profile/
+├── user-profile.component.ts    # Standalone, OnPush, app-user-profile selector
+├── user-profile.component.html
+└── user-profile.component.scss
+```
+
+A lazy-load route snippet is printed to the terminal after generation:
+```typescript
+{ path: 'user-profile', loadComponent: () => import('./pages/user-profile/user-profile.component').then(m => m.UserProfilePageComponent) }
+```
+
+*Vue* — written to `src/pages/<Name>/`
+```
+src/pages/UserProfile/
+├── UserProfilePage.vue   # <script setup> SFC with scoped SCSS
+└── index.ts              # Barrel re-export
+```
+
+---
+
+### `m2s2 generate service`
+
+Scaffold an injectable Angular service inside an existing M²S² project.
+
+```bash
+m2s2 generate service <name> [OPTIONS]
+```
+
+> Only supported for Angular projects. React and Vue projects receive a helpful error message.
+
+**Arguments**
+
+| Argument | Description |
+|----------|-------------|
+| `<name>` | Service name (without the `Service` suffix). |
+
+**Options**
+
+| Flag | Description |
+|------|-------------|
+| `--path <dir>` | Override the output directory. Defaults to `src/app/services/`. |
+
+**Examples**
+
+```bash
+m2s2 generate service Auth
+m2s2 generate service user-data
+m2s2 generate service Analytics --path src/app/core/services
+```
+
+**What gets generated** — written to `src/app/services/<name>/`
+```
+src/app/services/auth/
+└── auth.service.ts   # @Injectable({ providedIn: 'root' }) AuthService
+```
+
+---
+
 ### `m2s2 completions`
 
 Install shell completions for `m2s2`. Auto-detects your shell from `$SHELL` and writes a completion script to your home directory, then patches your shell's rc file to source it automatically.
@@ -304,13 +407,13 @@ All scaffold and generate templates live under `templates/` and are embedded int
 
 ```
 templates/
-├── react/          # m2s2 new --framework react
-├── angular/        # m2s2 new --framework angular
-├── vue/            # m2s2 new --framework vue
+├── react/               # m2s2 new --framework react
+├── angular/             # m2s2 new --framework angular
+├── vue/                 # m2s2 new --framework vue
 └── generate/
-    ├── react/      # m2s2 generate component (React)
-    ├── angular/    # m2s2 generate component (Angular)
-    └── vue/        # m2s2 generate component (Vue)
+    ├── react/           # m2s2 generate component/page (React)
+    ├── angular/         # m2s2 generate component/page/service (Angular)
+    └── vue/             # m2s2 generate component/page (Vue)
 ```
 
 ---
@@ -347,15 +450,19 @@ cd test-app
 ```
 src/
 ├── main.rs                        # CLI entry point, command routing
+├── utils.rs                       # Shared case conversion (to_pascal_case, to_kebab_case)
+├── config.rs                      # .m2s2.json read/write, framework detection/resolution
 ├── scaffold/
-│   └── mod.rs                     # Template engine (rust-embed + Handlebars)
+│   └── mod.rs                     # Template engine (rust-embed + Handlebars), write_files helper
 └── commands/
     ├── mod.rs
     ├── new.rs                     # m2s2 new
     ├── upgrade.rs                 # m2s2 upgrade
     └── generate/
         ├── mod.rs                 # m2s2 generate (subcommand router)
-        └── component.rs          # m2s2 generate component
+        ├── component.rs          # m2s2 generate component
+        ├── page.rs               # m2s2 generate page
+        └── service.rs            # m2s2 generate service
 ```
 
 ---
@@ -373,22 +480,23 @@ Runs on every push to `main` and every pull request.
 | `clippy` | Runs `cargo clippy -- -D warnings`. |
 | `fmt` | Runs `cargo fmt --check`. |
 
-### Release (`release-plz.yml` + `release.yml`)
+### Release (`release-plz.yml` + `auto-merge-release.yml` + `release-tag.yml` + `release.yml`)
 
-Releases are fully automated from conventional commits — no PRs, no manual tagging required.
+Releases are fully automated from conventional commits — no manual tagging or PR review required.
 
 1. **CI passes on `main`** — `release-plz.yml` triggers only after the `CI` workflow succeeds.
-2. **Version bump** — `release-plz update` reads conventional commit history, bumps `Cargo.toml`, and updates `CHANGELOG.md`. Only `feat`, `fix`, and `perf` commits trigger a bump; `chore`, `docs`, `refactor`, and others are skipped.
-3. **Tag pushed** — the bump is committed directly to `main` and a `vX.Y.Z` tag is pushed.
-4. **`release.yml` (cargo-dist) triggers** — builds platform binaries in parallel:
+2. **Release PR opened** — `release-plz release-pr` reads conventional commit history, bumps `Cargo.toml`, updates `CHANGELOG.md`, and opens a PR (e.g. `chore: release v0.1.5`). Only `feat`, `fix`, and `perf` commits trigger a bump.
+3. **PR auto-approved and merged** — `auto-merge-release.yml` detects the `release-plz-*` branch, approves the PR using the GitHub App token, and immediately squash-merges it.
+4. **Tag pushed** — `release-tag.yml` fires on the merge commit, reads the version from `Cargo.toml`, and pushes the `vX.Y.Z` tag if it doesn't already exist.
+5. **`release.yml` (cargo-dist) triggers** — builds platform binaries in parallel:
    - `aarch64-apple-darwin`
    - `x86_64-apple-darwin`
    - `aarch64-unknown-linux-gnu`
    - `x86_64-unknown-linux-gnu`
    - `x86_64-pc-windows-msvc`
-5. **GitHub Release created** — all binaries, checksums, shell installer, and PowerShell installer are attached.
-6. **`publish-npm.yml` triggers** — publishes `@m2s2/cli` to npm.
-7. **`publish-crates.yml` triggers** — publishes `m2s2-cli` to crates.io.
+6. **GitHub Release created** — all binaries, checksums, shell installer, and PowerShell installer are attached.
+7. **`publish-npm.yml` triggers** — publishes `@m2s2/cli` to npm.
+8. **`publish-crates.yml` triggers** — publishes `m2s2-cli` to crates.io.
 
 ### Template Sync (`template-sync.yml`)
 
@@ -404,8 +512,8 @@ When a version change is detected, the workflow opens a pull request updating th
 
 | Secret | Used By | Description |
 |--------|---------|-------------|
-| `APP_ID` | `release-plz.yml` | GitHub App ID for bypassing branch protection on release commits. |
-| `APP_PRIVATE_KEY` | `release-plz.yml` | GitHub App private key. |
+| `APP_ID` | `release-plz.yml`, `auto-merge-release.yml`, `release-tag.yml`, `release.yml` | GitHub App ID used to open, approve, merge release PRs, and push tags. |
+| `APP_PRIVATE_KEY` | `release-plz.yml`, `auto-merge-release.yml`, `release-tag.yml`, `release.yml` | GitHub App private key. |
 | `NPM_TOKEN` | `publish-npm.yml` | npm access token with publish rights to the `@m2s2` scope. |
 | `CARGO_REGISTRY_TOKEN` | `publish-crates.yml` | crates.io API token for publishing `m2s2-cli`. |
 
