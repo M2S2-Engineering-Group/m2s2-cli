@@ -1,0 +1,26 @@
+name: Auto-merge Release PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  auto-merge:
+    if: startsWith(github.head_ref, 'release-plz-')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Approve and merge release PR
+        run: |
+          gh pr review "${{ github.event.pull_request.number }}" --approve --repo "${{ github.repository }}"
+          gh pr merge "${{ github.event.pull_request.number }}" --squash --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

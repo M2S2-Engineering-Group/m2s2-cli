@@ -1,4 +1,4 @@
-name: Version Bump
+name: Release PR
 
 on:
   workflow_run:
@@ -7,7 +7,7 @@ on:
     types: [completed]
 
 jobs:
-  release:
+  release-pr:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
@@ -32,27 +32,5 @@ jobs:
         with:
           tool: release-plz
 
-      - name: Bump version
-        id: bump
-        run: |
-          release-plz update
-          if git diff --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Commit and push tag
-        if: steps.bump.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock CHANGELOG.md
-          git commit -m "chore(release): v${{ steps.bump.outputs.version }} [skip ci]"
-          git push origin HEAD:main
-          git tag "v${{ steps.bump.outputs.version }}"
-          git push origin "v${{ steps.bump.outputs.version }}"
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Open or update release PR
+        run: release-plz release-pr --git-token ${{ steps.app-token.outputs.token }}
