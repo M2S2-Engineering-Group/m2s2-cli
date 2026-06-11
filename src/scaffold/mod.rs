@@ -33,8 +33,7 @@ pub fn write_files(out_dir: &Path, files: &[(&str, &str)], data: &Value) -> Resu
             .with_context(|| format!("missing embedded template '{template_path}'"))?;
         let content = render(&raw, data)?;
         let out = out_dir.join(file_name);
-        fs::write(&out, content)
-            .with_context(|| format!("failed to write '{}'", out.display()))?;
+        fs::write(&out, content).with_context(|| format!("failed to write '{}'", out.display()))?;
         println!("  {} {}", style("create").green(), out.display());
     }
     Ok(())

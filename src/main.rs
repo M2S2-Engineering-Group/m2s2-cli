@@ -52,9 +52,7 @@ async fn main() -> Result<()> {
             commands::generate::GenerateCommands::Component(a) => {
                 commands::generate::component::run(a).await
             }
-            commands::generate::GenerateCommands::Page(a) => {
-                commands::generate::page::run(a).await
-            }
+            commands::generate::GenerateCommands::Page(a) => commands::generate::page::run(a).await,
             commands::generate::GenerateCommands::Service(a) => {
                 commands::generate::service::run(a).await
             }

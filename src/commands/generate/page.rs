@@ -22,15 +22,15 @@ pub struct PageArgs {
 }
 
 pub async fn run(args: PageArgs) -> Result<()> {
-    let pascal    = to_pascal_case(&args.name);
-    let kebab     = to_kebab_case(&pascal);
+    let pascal = to_pascal_case(&args.name);
+    let kebab = to_kebab_case(&pascal);
     let framework = resolve_framework(args.framework)?;
 
     let out_dir = match args.path {
         Some(ref p) => Path::new(p).join(&pascal),
         None => match framework.as_str() {
             "angular" => Path::new("src/app/pages").join(&kebab),
-            _          => Path::new("src/pages").join(&pascal),
+            _ => Path::new("src/pages").join(&pascal),
         },
     };
 
@@ -44,19 +44,31 @@ pub async fn run(args: PageArgs) -> Result<()> {
 
     let files: &[(&str, &str)] = match framework.as_str() {
         "react" => &[
-            ("generate/react/page.tsx.hbs",  &format!("{pascal}Page.tsx")),
-            ("generate/react/page.scss.hbs", &format!("{pascal}Page.scss")),
-            ("generate/react/index.ts.hbs",   "index.ts"),
+            ("generate/react/page.tsx.hbs", &format!("{pascal}Page.tsx")),
+            (
+                "generate/react/page.scss.hbs",
+                &format!("{pascal}Page.scss"),
+            ),
+            ("generate/react/index.ts.hbs", "index.ts"),
         ],
         "vue" => &[
-            ("generate/vue/page.vue.hbs",  &format!("{pascal}Page.vue")),
+            ("generate/vue/page.vue.hbs", &format!("{pascal}Page.vue")),
             ("generate/vue/page.scss.hbs", &format!("{pascal}Page.scss")),
-            ("generate/vue/index.ts.hbs",   "index.ts"),
+            ("generate/vue/index.ts.hbs", "index.ts"),
         ],
         _ => &[
-            ("generate/angular/page.ts.hbs",   &format!("{kebab}.component.ts")),
-            ("generate/angular/page.html.hbs", &format!("{kebab}.component.html")),
-            ("generate/angular/page.scss.hbs", &format!("{kebab}.component.scss")),
+            (
+                "generate/angular/page.ts.hbs",
+                &format!("{kebab}.component.ts"),
+            ),
+            (
+                "generate/angular/page.html.hbs",
+                &format!("{kebab}.component.html"),
+            ),
+            (
+                "generate/angular/page.scss.hbs",
+                &format!("{kebab}.component.scss"),
+            ),
         ],
     };
 

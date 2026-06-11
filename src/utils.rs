@@ -4,7 +4,7 @@ pub fn to_pascal_case(input: &str) -> String {
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
-                None    => String::new(),
+                None => String::new(),
                 Some(c) => c.to_uppercase().to_string() + chars.as_str(),
             }
         })

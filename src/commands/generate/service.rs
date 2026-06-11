@@ -18,8 +18,8 @@ pub struct ServiceArgs {
 }
 
 pub async fn run(args: ServiceArgs) -> Result<()> {
-    let pascal    = to_pascal_case(&args.name);
-    let kebab     = to_kebab_case(&pascal);
+    let pascal = to_pascal_case(&args.name);
+    let kebab = to_kebab_case(&pascal);
     let framework = resolve_framework(None)?;
 
     if framework != "angular" {
@@ -33,7 +33,7 @@ pub async fn run(args: ServiceArgs) -> Result<()> {
 
     let out_dir = match args.path {
         Some(ref p) => Path::new(p).to_path_buf(),
-        None        => Path::new("src/app/services").to_path_buf(),
+        None => Path::new("src/app/services").to_path_buf(),
     };
 
     fs::create_dir_all(&out_dir)?;
@@ -45,7 +45,14 @@ pub async fn run(args: ServiceArgs) -> Result<()> {
 
     let data = json!({ "name": pascal, "file_name": kebab });
 
-    scaffold::write_files(&out_dir, &[("generate/angular/service.ts.hbs", &format!("{kebab}.service.ts"))], &data)?;
+    scaffold::write_files(
+        &out_dir,
+        &[(
+            "generate/angular/service.ts.hbs",
+            &format!("{kebab}.service.ts"),
+        )],
+        &data,
+    )?;
 
     println!(
         "\n{} {} service generated.\n",

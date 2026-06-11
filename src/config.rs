@@ -26,17 +26,14 @@ pub fn resolve_framework(explicit: Option<String>) -> Result<String> {
     if let Some(f) = explicit {
         return Ok(f);
     }
-    detect_framework().context(
-        "could not detect framework — run from your project root or pass --framework",
-    )
+    detect_framework()
+        .context("could not detect framework — run from your project root or pass --framework")
 }
 
 /// Detect the framework by reading `.m2s2.json` first, then `package.json`.
 pub fn detect_framework() -> Option<String> {
-    if let Some(cfg) = M2S2Config::load() {
-        if cfg.framework.is_some() {
-            return cfg.framework;
-        }
+    if let Some(cfg) = M2S2Config::load().filter(|c| c.framework.is_some()) {
+        return cfg.framework;
     }
     let raw = fs::read_to_string("package.json").ok()?;
     let pkg: serde_json::Value = serde_json::from_str(&raw).ok()?;
