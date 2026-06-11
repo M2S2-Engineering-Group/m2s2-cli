@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-06-11
+
+### Bug Fixes
+- Sync template dependencies to latest @m2s2 releases
+- Add pre-commit hooks for clippy and fmt
+
+### Features
+- Vue, react, angular page and service generation
+
+
 ## [0.1.20] - 2026-06-08
 
 
