@@ -18,9 +18,12 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      - name: Approve and merge release PR
-        run: |
-          gh pr review "${{ github.event.pull_request.number }}" --approve --repo "${{ github.repository }}"
-          gh pr merge "${{ github.event.pull_request.number }}" --squash --repo "${{ github.repository }}"
+      - name: Approve release PR
+        run: gh pr review "${{ github.event.pull_request.number }}" --approve --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge release PR
+        run: gh pr merge "${{ github.event.pull_request.number }}" --squash --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
