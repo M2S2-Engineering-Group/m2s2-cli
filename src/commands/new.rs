@@ -49,8 +49,23 @@ pub async fn run(args: NewArgs) -> Result<()> {
 
     let versions = match framework.as_str() {
         "angular" => {
-            npm::resolve_for_framework("@m2s2/ng-lib", &["rxjs", "zone.js", "typescript", "tslib"])
-                .await?
+            npm::resolve_for_framework(
+                "@m2s2/ng-lib",
+                &[
+                    "rxjs",
+                    "zone.js",
+                    "typescript",
+                    "tslib",
+                    "jest",
+                    "jest-preset-angular",
+                    "@types/jest",
+                    "eslint",
+                    "@eslint/js",
+                    "typescript-eslint",
+                    "angular-eslint",
+                ],
+            )
+            .await?
         }
         "react" => {
             npm::resolve_for_framework(
@@ -58,10 +73,19 @@ pub async fn run(args: NewArgs) -> Result<()> {
                 &[
                     "typescript",
                     "vite",
+                    "vitest",
                     "@types/react",
                     "@types/react-dom",
                     "@vitejs/plugin-react",
+                    "@testing-library/react",
+                    "@testing-library/jest-dom",
+                    "jsdom",
                     "sass-embedded",
+                    "eslint",
+                    "@eslint/js",
+                    "typescript-eslint",
+                    "eslint-plugin-react-hooks",
+                    "eslint-plugin-react-refresh",
                 ],
             )
             .await?
@@ -72,9 +96,17 @@ pub async fn run(args: NewArgs) -> Result<()> {
                 &[
                     "typescript",
                     "vite",
+                    "vitest",
                     "@vitejs/plugin-vue",
+                    "@testing-library/vue",
+                    "@testing-library/jest-dom",
+                    "jsdom",
                     "vue-tsc",
                     "sass-embedded",
+                    "eslint",
+                    "@eslint/js",
+                    "typescript-eslint",
+                    "eslint-plugin-vue",
                 ],
             )
             .await?

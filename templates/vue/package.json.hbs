@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@m2s2/vue-lib": "^2.4.1",
@@ -13,10 +16,18 @@
     "vue": "^{{vue}}"
   },
   "devDependencies": {
+    "@eslint/js": "^{{_eslint_js}}",
+    "@testing-library/jest-dom": "^{{_testing_library_jest_dom}}",
+    "@testing-library/vue": "^{{_testing_library_vue}}",
     "@vitejs/plugin-vue": "^{{_vitejs_plugin_vue}}",
+    "eslint": "^{{eslint}}",
+    "eslint-plugin-vue": "^{{eslint_plugin_vue}}",
+    "jsdom": "^{{jsdom}}",
     "sass-embedded": "^{{sass_embedded}}",
     "typescript": "~{{typescript}}",
+    "typescript-eslint": "^{{typescript_eslint}}",
     "vite": "^{{vite}}",
+    "vitest": "^{{vitest}}",
     "vue-tsc": "^{{vue_tsc}}"
   }
 }

@@ -32,6 +32,14 @@ enum Commands {
     New(commands::new::NewArgs),
     /// Scaffold components and other project artifacts
     Generate(commands::generate::GenerateArgs),
+    /// Start the development server
+    Dev(commands::run::DevArgs),
+    /// Build the project for production
+    Build(commands::run::BuildArgs),
+    /// Run the test suite
+    Test(commands::run::TestArgs),
+    /// Lint the project
+    Lint(commands::run::LintArgs),
     /// Check for and install updates
     Upgrade(commands::upgrade::UpgradeArgs),
     /// Install shell completions (auto-detects shell from $SHELL)
@@ -57,6 +65,10 @@ async fn main() -> Result<()> {
                 commands::generate::service::run(a).await
             }
         },
+        Commands::Dev(args) => commands::run::dev(args).await,
+        Commands::Build(args) => commands::run::build(args).await,
+        Commands::Test(args) => commands::run::test(args).await,
+        Commands::Lint(args) => commands::run::lint(args).await,
         Commands::Upgrade(args) => commands::upgrade::run(args).await,
         Commands::Completions { shell } => {
             let shell = match shell {

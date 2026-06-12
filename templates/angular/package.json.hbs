@@ -5,7 +5,10 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
-    "watch": "ng build --watch --configuration development"
+    "watch": "ng build --watch --configuration development",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@angular/animations": "^{{_angular_animations}}",
@@ -28,6 +31,13 @@
     "@angular/build": "^{{_angular_build}}",
     "@angular/cli": "^{{_angular_cli}}",
     "@angular/compiler-cli": "^{{_angular_compiler_cli}}",
-    "typescript": "^{{typescript}}"
+    "@eslint/js": "^{{_eslint_js}}",
+    "@types/jest": "^{{_types_jest}}",
+    "angular-eslint": "^{{angular_eslint}}",
+    "eslint": "^{{eslint}}",
+    "jest": "^{{jest}}",
+    "jest-preset-angular": "^{{jest_preset_angular}}",
+    "typescript": "^{{typescript}}",
+    "typescript-eslint": "^{{typescript_eslint}}"
   }
 }
