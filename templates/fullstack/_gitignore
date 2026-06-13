@@ -1,0 +1,12 @@
+# Frontend
+node_modules/
+dist/
+.env.local
+
+# Backend
+bin/
+*.exe
+
+# Common
+.env
+.DS_Store

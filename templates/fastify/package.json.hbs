@@ -1,0 +1,25 @@
+{
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "fastify": "^{{fastify}}"
+  },
+  "devDependencies": {
+    "@eslint/js": "^{{_eslint_js}}",
+    "@types/node": "^{{_types_node}}",
+    "eslint": "^{{eslint}}",
+    "tsx": "^{{tsx}}",
+    "typescript": "^{{typescript}}",
+    "typescript-eslint": "^{{typescript_eslint}}",
+    "vitest": "^{{vitest}}"
+  }
+}

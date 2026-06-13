@@ -1,0 +1,13 @@
+.PHONY: dev build test lint
+
+dev:
+	go run ./...
+
+build:
+	go build -o bin/api ./...
+
+test:
+	go test ./...
+
+lint:
+	go vet ./...

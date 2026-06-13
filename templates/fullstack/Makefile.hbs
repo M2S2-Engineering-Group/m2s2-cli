@@ -1,0 +1,22 @@
+.PHONY: dev build test lint
+
+dev:
+	@make -j2 dev-web dev-api
+
+dev-web:
+	cd apps/web && npm run {{frontend_dev_script}}
+
+dev-api:
+	$(MAKE) -C apps/api dev
+
+build:
+	cd apps/web && npm run build
+	$(MAKE) -C apps/api build
+
+test:
+	cd apps/web && npm test
+	$(MAKE) -C apps/api test
+
+lint:
+	cd apps/web && npm run lint
+	$(MAKE) -C apps/api lint

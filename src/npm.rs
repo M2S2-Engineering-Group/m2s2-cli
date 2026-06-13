@@ -131,6 +131,29 @@ async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
         .with_context(|| format!("failed to parse npm metadata for '{package}'"))
 }
 
+/// Fetch the latest version of each package directly, with no anchor library.
+/// Used for backend runtimes (Node) that have no m2s2 peer dependency to derive versions from.
+pub async fn resolve_packages(packages: &[&str]) -> Result<Map<String, Value>> {
+    let client = Client::new();
+    let futures: Vec<_> = packages
+        .iter()
+        .map(|&pkg| {
+            let client = client.clone();
+            async move {
+                let m = fetch_meta(&client, pkg).await?;
+                Ok::<_, anyhow::Error>((pkg.to_string(), m.version))
+            }
+        })
+        .collect();
+
+    let mut versions = Map::new();
+    for result in futures::future::join_all(futures).await {
+        let (pkg, version) = result?;
+        versions.insert(sanitize_key(&pkg), Value::String(version));
+    }
+    Ok(versions)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

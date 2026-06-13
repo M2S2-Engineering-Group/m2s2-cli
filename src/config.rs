@@ -5,6 +5,9 @@ use std::fs;
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct M2S2Config {
     pub framework: Option<String>,
+    pub api_framework: Option<String>,
+    pub project_type: Option<String>,
+    pub runtime: Option<String>,
 }
 
 impl M2S2Config {
@@ -20,8 +23,7 @@ impl M2S2Config {
     }
 }
 
-/// Resolve framework from an explicit CLI flag, falling back to `.m2s2.json`
-/// then `package.json`. Returns an error if none of those sources yield a result.
+/// Resolve frontend framework from CLI flag → `.m2s2.json` → `package.json`.
 pub fn resolve_framework(explicit: Option<String>) -> Result<String> {
     if let Some(f) = explicit {
         return Ok(f);
@@ -30,7 +32,21 @@ pub fn resolve_framework(explicit: Option<String>) -> Result<String> {
         .context("could not detect framework — run from your project root or pass --framework")
 }
 
-/// Detect the framework by reading `.m2s2.json` first, then `package.json`.
+/// Project type defaults to "frontend" for backward compatibility.
+pub fn resolve_project_type() -> String {
+    M2S2Config::load()
+        .and_then(|c| c.project_type)
+        .unwrap_or_else(|| "frontend".into())
+}
+
+pub fn resolve_api_framework() -> Option<String> {
+    M2S2Config::load().and_then(|c| c.api_framework)
+}
+
+pub fn resolve_runtime() -> Option<String> {
+    M2S2Config::load().and_then(|c| c.runtime)
+}
+
 pub fn detect_framework() -> Option<String> {
     if let Some(cfg) = M2S2Config::load().filter(|c| c.framework.is_some()) {
         return cfg.framework;

@@ -1,0 +1,11 @@
+package routes
+
+import (
+	"{{name}}/internal/handlers"
+
+	"github.com/gin-gonic/gin"
+)
+
+func Register(r *gin.Engine) {
+	r.GET("/health", handlers.Health)
+}

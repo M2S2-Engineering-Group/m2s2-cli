@@ -18,8 +18,12 @@ use std::{
 #[command(
     name = "m2s2",
     version,
-    about = "Scaffold M²S² design system projects",
-    long_about = None,
+    about = "Scaffold and run M²S² full-stack projects",
+    long_about = "m2s2 scaffolds full-stack monorepos with your choice of frontend \
+(React, Angular, Vue) and backend (Go, Node, Python) framework, wired to the \
+M\u{b2}S\u{b2} design system. It also provides unified dev/build/test/lint commands \
+that work across all supported runtimes.\n\n\
+Run `m2s2 new --help` to see non-interactive examples."
 )]
 struct Cli {
     #[command(subcommand)]

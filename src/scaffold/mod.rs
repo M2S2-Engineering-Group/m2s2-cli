@@ -25,8 +25,6 @@ pub fn render(raw: &str, data: &Value) -> Result<String> {
 }
 
 /// Render and write a set of template files into `out_dir`, printing each created path.
-///
-/// `files` is a slice of `(template_path, output_filename)` pairs.
 pub fn write_files(out_dir: &Path, files: &[(&str, &str)], data: &Value) -> Result<()> {
     for (template_path, file_name) in files {
         let raw = get_template(template_path)
@@ -41,23 +39,60 @@ pub fn write_files(out_dir: &Path, files: &[(&str, &str)], data: &Value) -> Resu
 
 pub struct ScaffoldContext {
     pub name: String,
-    pub framework: String,
+    pub project_type: String,
+    pub framework: Option<String>,
+    pub api_framework: Option<String>,
     pub versions: serde_json::Map<String, Value>,
 }
 
 pub fn run(ctx: &ScaffoldContext) -> Result<()> {
-    let mut hbs = Handlebars::new();
-    hbs.set_strict_mode(true);
+    let data = build_data(ctx);
 
+    match ctx.project_type.as_str() {
+        "frontend" => {
+            let fw = ctx.framework.as_deref().unwrap();
+            scaffold_into(Path::new(&ctx.name), fw, &data)?;
+        }
+        "backend" => {
+            let api_fw = ctx.api_framework.as_deref().unwrap();
+            scaffold_into(Path::new(&ctx.name), api_fw, &data)?;
+        }
+        "fullstack" => {
+            let fw = ctx.framework.as_deref().unwrap();
+            let api_fw = ctx.api_framework.as_deref().unwrap();
+            scaffold_into(&Path::new(&ctx.name).join("apps/web"), fw, &data)?;
+            scaffold_into(&Path::new(&ctx.name).join("apps/api"), api_fw, &data)?;
+            scaffold_into(Path::new(&ctx.name), "fullstack", &data)?;
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
+fn build_data(ctx: &ScaffoldContext) -> Value {
     let mut data = json!({ "name": ctx.name });
     for (k, v) in &ctx.versions {
         data[k] = v.clone();
     }
-    let prefix = format!("{}/", ctx.framework);
-    let target = Path::new(&ctx.name);
+    if let Some(fw) = &ctx.framework {
+        data["frontend_dev_script"] = Value::String(if fw == "angular" {
+            "start".into()
+        } else {
+            "dev".into()
+        });
+    }
+    data
+}
+
+fn scaffold_into(target: &Path, template_prefix: &str, data: &Value) -> Result<()> {
+    let mut hbs = Handlebars::new();
+    hbs.set_strict_mode(true);
+
+    let prefix = format!("{template_prefix}/");
 
     fs::create_dir_all(target)
-        .with_context(|| format!("failed to create directory '{}'", ctx.name))?;
+        .with_context(|| format!("failed to create directory '{}'", target.display()))?;
 
     for path in Templates::iter() {
         let path_str = path.as_ref();
@@ -66,11 +101,15 @@ pub fn run(ctx: &ScaffoldContext) -> Result<()> {
             continue;
         }
 
+        // Skip generate/ subtree
+        if path_str.contains("/generate/") {
+            continue;
+        }
+
         let relative = &path_str[prefix.len()..];
         let (out_relative, render) = if let Some(stem) = relative.strip_suffix(".hbs") {
             (stem.to_string(), true)
         } else if let Some(stem) = relative.strip_prefix('_') {
-            // _gitignore → .gitignore
             let dir = Path::new(relative)
                 .parent()
                 .map(|p| p.to_str().unwrap_or(""))
@@ -96,7 +135,7 @@ pub fn run(ctx: &ScaffoldContext) -> Result<()> {
             .with_context(|| format!("template '{path_str}' is not valid UTF-8"))?;
 
         let content = if render {
-            hbs.render_template(raw, &data)
+            hbs.render_template(raw, data)
                 .with_context(|| format!("failed to render '{path_str}'"))?
         } else {
             raw.to_string()
