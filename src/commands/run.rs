@@ -155,9 +155,10 @@ fn spawn_backend_dev(dir: &Path) -> Result<std::process::Child> {
         }
         "python" => {
             let api_fw = resolve_api_framework().unwrap_or_default();
-            let (bin, py_args) = python_dev_cmd(&api_fw);
-            print_cmd(&format!("{bin} {}", py_args.join(" ")));
-            Command::new(bin)
+            let py_args = python_dev_args(&api_fw);
+            print_cmd(&format!("python3 -m {}", py_args.join(" ")));
+            Command::new("python3")
+                .arg("-m")
                 .args(&py_args)
                 .current_dir(dir)
                 .spawn()
@@ -185,7 +186,7 @@ fn run_backend_build(extra: &[String], dir: &Path) -> Result<()> {
 fn run_backend_test(extra: &[String], dir: &Path) -> Result<()> {
     match current_runtime().as_str() {
         "node" => run_npm_script("test", extra, dir),
-        "python" => run_cmd("pytest", extra, dir),
+        "python" => run_python_module("pytest", extra, dir),
         _ => run_go(&["test", "./..."], extra, dir),
     }
 }
@@ -193,7 +194,7 @@ fn run_backend_test(extra: &[String], dir: &Path) -> Result<()> {
 fn run_backend_lint(extra: &[String], dir: &Path) -> Result<()> {
     match current_runtime().as_str() {
         "node" => run_npm_script("lint", extra, dir),
-        "python" => run_cmd("ruff", &prepend("check .", extra), dir),
+        "python" => run_python_module("ruff", &prepend("check .", extra), dir),
         _ => run_go(&["vet", "./..."], extra, dir),
     }
 }
@@ -250,28 +251,36 @@ fn run_go(go_args: &[&str], extra: &[String], dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn run_cmd(bin: &str, args: &[String], dir: &Path) -> Result<()> {
-    let args_str = args.join(" ");
-    print_cmd(&format!("{bin} {args_str}"));
-    let status = Command::new(bin)
-        .args(args)
-        .current_dir(dir)
-        .status()
-        .with_context(|| format!("failed to spawn `{bin}`"))?;
-    if !status.success() {
-        bail!("`{bin}` exited with code {}", status.code().unwrap_or(1));
-    }
-    Ok(())
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn python_dev_cmd(api_framework: &str) -> (&'static str, Vec<&'static str>) {
+fn python_dev_args(api_framework: &str) -> Vec<&'static str> {
     match api_framework {
-        "fastapi" => ("uvicorn", vec!["main:app", "--reload"]),
-        "flask" => ("flask", vec!["run", "--debug"]),
-        _ => ("python", vec!["main.py"]),
+        "fastapi" => vec!["uvicorn", "main:app", "--reload"],
+        "flask" => vec!["flask", "run", "--debug"],
+        _ => vec!["main"],
     }
+}
+
+fn run_python_module(module: &str, extra: &[String], dir: &Path) -> Result<()> {
+    let extra_str = if extra.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", extra.join(" "))
+    };
+    print_cmd(&format!("python3 -m {module}{extra_str}"));
+    let status = Command::new("python3")
+        .args(["-m", module])
+        .args(extra)
+        .current_dir(dir)
+        .status()
+        .with_context(|| format!("failed to spawn `python3 -m {module}`"))?;
+    if !status.success() {
+        bail!(
+            "`python3 -m {module}` exited with code {}",
+            status.code().unwrap_or(1)
+        );
+    }
+    Ok(())
 }
 
 fn dev_script(framework: &str) -> &'static str {

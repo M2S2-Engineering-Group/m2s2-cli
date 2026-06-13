@@ -218,8 +218,8 @@ pub async fn run(args: NewArgs) -> Result<()> {
                 }
                 Some("python") => {
                     spinner.set_message("Running pip install…");
-                    let status = Command::new("pip")
-                        .args(["install", "-r", "requirements.txt"])
+                    let status = Command::new("python3")
+                        .args(["-m", "pip", "install", "-r", "requirements.txt"])
                         .current_dir(&dir)
                         .status()
                         .await?;
