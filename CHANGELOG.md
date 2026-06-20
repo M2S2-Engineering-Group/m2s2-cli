@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-06-20
+
+### Bug Fixes
+- Sync template dependencies to latest @m2s2 releases
+
+
 ## [0.1.31] - 2026-06-19
 
 ### Bug Fixes
