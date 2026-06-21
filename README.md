@@ -2,7 +2,7 @@
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/mgmaster24?style=flat&logo=githubsponsors&label=Sponsor)](https://github.com/sponsors/mgmaster24)
 
-The official CLI for scaffolding and working with [M²S²](https://github.com/M2S2-Engineering-Group) design system projects. Create new React, Angular, or Vue applications pre-wired with M²S² components, generate components, and keep your installation up to date — all from the terminal.
+The official CLI for scaffolding and working with [M²S²](https://github.com/M2S2-Engineering-Group) design system projects. Create new frontend (React, Angular, Vue), backend (Go, Node, Python), or fullstack projects pre-wired with M²S² components, generate components and pages, and keep your installation up to date — all from the terminal.
 
 ## Table of Contents
 
@@ -79,24 +79,45 @@ m2s2 new <name> [OPTIONS]
 
 **Options**
 
-| Flag | Description |
-|------|-------------|
-| `--framework <react\|angular\|vue>` | Framework to scaffold. Prompted interactively if omitted. |
-| `--skip-install` | Skip running `npm install` after writing project files. |
+| Flag | Values | Description |
+|------|--------|-------------|
+| `--project-type` | `frontend` `backend` `fullstack` | Project type. Prompted interactively if omitted. |
+| `--framework` | `react` `angular` `vue` | Frontend framework. Required for frontend and fullstack projects. |
+| `--runtime` | `go` `node` `python` | Backend runtime. Required for backend and fullstack projects. |
+| `--api-framework` | `gin` `echo` `fiber` `express` `fastify` `fastapi` `flask` | API framework. Infers `--runtime` if omitted. |
+| `--skip-install` | | Skip `npm install` / `go mod tidy` / `pip install` after scaffolding. |
+| `--offline` | | Skip npm version resolution (uses placeholder versions). Intended for testing. |
 
 **Examples**
 
 ```bash
-# Interactive framework selection
+# Interactive — prompts for all choices
 m2s2 new my-app
 
-# Explicit framework
-m2s2 new my-app --framework react
-m2s2 new my-app --framework angular
-m2s2 new my-app --framework vue
+# Frontend
+m2s2 new my-app --project-type frontend --framework react
+m2s2 new my-app --project-type frontend --framework angular
+m2s2 new my-app --project-type frontend --framework vue
 
-# Skip npm install (useful in CI or offline environments)
-m2s2 new my-app --framework react --skip-install
+# Backend — Go
+m2s2 new my-api --project-type backend --runtime go --api-framework gin
+m2s2 new my-api --project-type backend --runtime go --api-framework echo
+m2s2 new my-api --project-type backend --runtime go --api-framework fiber
+
+# Backend — Node
+m2s2 new my-api --project-type backend --runtime node --api-framework express
+m2s2 new my-api --project-type backend --runtime node --api-framework fastify
+
+# Backend — Python (creates a .venv and runs pip install)
+m2s2 new my-api --project-type backend --runtime python --api-framework fastapi
+m2s2 new my-api --project-type backend --runtime python --api-framework flask
+
+# Fullstack
+m2s2 new my-app --project-type fullstack --framework react --runtime go --api-framework gin
+m2s2 new my-app --project-type fullstack --framework vue --runtime python --api-framework fastapi
+
+# Skip install (useful in CI)
+m2s2 new my-app --project-type frontend --framework react --skip-install
 ```
 
 **What gets generated**
@@ -420,28 +441,48 @@ templates/
 
 ## Testing
 
+The test suite has two tiers.
+
+### Unit / integration tests (fast, no network)
+
 ```bash
-# Run all tests
 cargo test
+```
 
-# Lint
+Covers all scaffold and generate paths using temp directories and an `--offline`
+flag that skips npm version resolution. Runs in under a second. Also includes
+`cargo clippy` and `cargo fmt` checks in CI.
+
+```bash
 cargo clippy -- -D warnings
-
-# Format check
 cargo fmt --check
 ```
 
-End-to-end smoke test (no npm install required):
+### End-to-end tests (network required)
+
+E2e tests scaffold real projects, resolve live package versions, and run the
+full install step (`npm install`, `go mod tidy`, `python3 -m venv` + `pip
+install`). They are marked `#[ignore]` and never run during normal CI.
 
 ```bash
-# Scaffold a React project and inspect the output
-cargo run -- new test-app --framework react --skip-install
-find test-app -type f
+# Run the full e2e suite
+cargo e2e
 
-# Generate a component inside it
-cd test-app
-../target/debug/m2s2 generate component MyCard
+# Run a single scenario
+cargo test --test e2e new_react_frontend_e2e -- --ignored --nocapture
 ```
+
+Each test asserts on install artifacts to confirm the toolchain ran:
+
+| Scenario | Artifact checked |
+|----------|-----------------|
+| React / Angular / Vue frontend | `node_modules/` |
+| Go backend (gin / echo / fiber) | `go.sum` |
+| Node backend (express / fastify) | `node_modules/` |
+| Python backend (fastapi / flask) | `.venv/` + `.venv/bin/pip` |
+| Fullstack | web `node_modules/` + api artifact |
+
+Temp directories are cleaned up automatically after each test.
 
 ---
 

@@ -57,6 +57,10 @@ pub struct NewArgs {
     /// Skip running npm install / go mod tidy / pip install after scaffolding
     #[arg(long)]
     pub skip_install: bool,
+
+    /// Skip network calls to resolve package versions (for offline use / tests)
+    #[arg(long)]
+    pub offline: bool,
 }
 
 pub async fn run(args: NewArgs) -> Result<()> {
@@ -124,7 +128,9 @@ pub async fn run(args: NewArgs) -> Result<()> {
     );
     spinner.enable_steady_tick(Duration::from_millis(80));
 
-    let versions = {
+    let versions = if args.offline {
+        offline_versions()
+    } else {
         let mut v = if project_type != "backend" {
             spinner.set_message("Resolving frontend package versions…");
             resolve_frontend_versions(framework.as_deref().unwrap()).await?
@@ -217,9 +223,19 @@ pub async fn run(args: NewArgs) -> Result<()> {
                     }
                 }
                 Some("python") => {
-                    spinner.set_message("Running pip install…");
+                    spinner.set_message("Creating virtual environment…");
                     let status = Command::new("python3")
-                        .args(["-m", "pip", "install", "-r", "requirements.txt"])
+                        .args(["-m", "venv", ".venv"])
+                        .current_dir(&dir)
+                        .status()
+                        .await?;
+                    if !status.success() {
+                        spinner.finish_and_clear();
+                        anyhow::bail!("python3 -m venv failed");
+                    }
+                    spinner.set_message("Running pip install…");
+                    let status = Command::new(".venv/bin/pip")
+                        .args(["install", "-r", "requirements.txt"])
                         .current_dir(&dir)
                         .status()
                         .await?;
@@ -259,6 +275,63 @@ fn frameworks_for_runtime(runtime: &str) -> Vec<&'static str> {
         "python" => vec!["fastapi", "flask"],
         _ => vec![],
     }
+}
+
+fn offline_versions() -> serde_json::Map<String, serde_json::Value> {
+    let keys = [
+        "_angular_animations",
+        "_angular_build",
+        "_angular_cdk",
+        "_angular_cli",
+        "_angular_common",
+        "_angular_compiler",
+        "_angular_compiler_cli",
+        "_angular_core",
+        "_angular_forms",
+        "_angular_material",
+        "_angular_platform_browser",
+        "_angular_platform_browser_dynamic",
+        "_angular_router",
+        "_eslint_js",
+        "_testing_library_jest_dom",
+        "_testing_library_react",
+        "_testing_library_vue",
+        "_types_express",
+        "_types_jest",
+        "_types_node",
+        "_types_react",
+        "_types_react_dom",
+        "_vitejs_plugin_react",
+        "_vitejs_plugin_vue",
+        "angular_eslint",
+        "eslint",
+        "eslint_plugin_react_hooks",
+        "eslint_plugin_react_refresh",
+        "eslint_plugin_vue",
+        "express",
+        "fastify",
+        "jest",
+        "jest_preset_angular",
+        "jsdom",
+        "react",
+        "react_dom",
+        "react_router",
+        "rxjs",
+        "sass_embedded",
+        "tslib",
+        "tsx",
+        "typescript",
+        "typescript_eslint",
+        "vite",
+        "vitest",
+        "vue",
+        "vue_tsc",
+        "zone_js",
+    ];
+    let placeholder = serde_json::Value::String("0.0.0".into());
+    keys.iter()
+        .map(|k| (k.to_string(), placeholder.clone()))
+        .collect()
 }
 
 async fn resolve_frontend_versions(
