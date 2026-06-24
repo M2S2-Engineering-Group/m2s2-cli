@@ -1,0 +1,27 @@
+import { ref } from 'vue';
+import { getCurrentUser, signIn, signOut, type AuthUser } from 'aws-amplify/auth';
+import './amplify';
+
+const user = ref<AuthUser | null>(null);
+
+export function useAuth() {
+  async function fetchUser() {
+    try {
+      user.value = await getCurrentUser();
+    } catch {
+      user.value = null;
+    }
+  }
+
+  async function login(username: string, password: string) {
+    await signIn({ username, password });
+    await fetchUser();
+  }
+
+  async function logout() {
+    await signOut();
+    user.value = null;
+  }
+
+  return { user, fetchUser, login, logout };
+}

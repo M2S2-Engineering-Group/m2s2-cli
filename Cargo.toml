@@ -29,6 +29,7 @@ rust-embed = { version = "8", features = ["include-exclude"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 futures = "0.3"
 semver = "1"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
 
 [dev-dependencies]
 assert_cmd = "2"

@@ -13,7 +13,10 @@
   "dependencies": {
     "@m2s2/vue-lib": "^2.7.0",
     "@m2s2/tokens": "^2.2.2",
-    "vue": "^{{vue}}"
+    "vue": "^{{vue}}"{{#if auth}},
+    "aws-amplify": "^{{aws_amplify}}",
+    "@aws-amplify/ui-vue": "^{{_aws_amplify_ui_vue}}"{{/if}}{{#if billing}},
+    "@stripe/stripe-js": "^{{_stripe_stripe_js}}"{{/if}}
   },
   "devDependencies": {
     "@eslint/js": "^{{_eslint_js}}",

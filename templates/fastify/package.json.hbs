@@ -11,7 +11,10 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "fastify": "^{{fastify}}"
+    "fastify": "^{{fastify}}"{{#if auth}},
+    "@fastify/jwt": "^{{_fastify_jwt}}",
+    "jwks-rsa": "^{{jwks_rsa}}"{{/if}}{{#if billing}},
+    "stripe": "^{{stripe}}"{{/if}}
   },
   "devDependencies": {
     "@eslint/js": "^{{_eslint_js}}",

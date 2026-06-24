@@ -1,0 +1,31 @@
+import os
+import httpx
+from functools import lru_cache, wraps
+from jose import jwt, JWTError
+from flask import request, jsonify
+
+
+@lru_cache
+def _jwks() -> dict:
+    region = os.environ["AWS_REGION"]
+    pool_id = os.environ["COGNITO_USER_POOL_ID"]
+    url = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}/.well-known/jwks.json"
+    return httpx.get(url).json()
+
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "unauthorized"}), 401
+        token = auth_header.removeprefix("Bearer ")
+        try:
+            header = jwt.get_unverified_header(token)
+            key = next(k for k in _jwks()["keys"] if k["kid"] == header["kid"])
+            claims = jwt.decode(token, key, algorithms=["RS256"])
+        except (JWTError, StopIteration):
+            return jsonify({"error": "invalid token"}), 401
+        kwargs["claims"] = claims
+        return f(*args, **kwargs)
+    return decorated

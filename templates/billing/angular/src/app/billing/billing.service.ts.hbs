@@ -1,0 +1,22 @@
+import { Injectable, signal } from '@angular/core';
+import { loadStripe, type Stripe } from '@stripe/stripe-js';
+import { environment } from '../../environments/environment';
+
+@Injectable({ providedIn: 'root' })
+export class BillingService {
+  loading = signal(false);
+  private stripe: Promise<Stripe | null> = loadStripe(environment.stripePublishableKey);
+
+  async checkout(priceId: string): Promise<void> {
+    this.loading.set(true);
+    const stripe = await this.stripe;
+    const res = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId }),
+    });
+    const { sessionId } = await res.json();
+    await stripe?.redirectToCheckout({ sessionId });
+    this.loading.set(false);
+  }
+}

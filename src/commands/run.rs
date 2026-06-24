@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use clap::Args;
+use clap::{Args, ValueEnum};
 use console::style;
 use std::path::Path;
 use std::process::Command;
@@ -7,6 +7,7 @@ use std::process::Command;
 use crate::config::{
     resolve_api_framework, resolve_framework, resolve_project_type, resolve_runtime,
 };
+use crate::types::{ApiFramework, Frontend};
 
 #[derive(Args)]
 pub struct DevArgs {
@@ -124,17 +125,14 @@ pub async fn lint(args: LintArgs) -> Result<()> {
 
 fn current_runtime() -> String {
     resolve_runtime()
-        .or_else(|| resolve_api_framework().map(|fw| runtime_of(&fw).to_string()))
+        .or_else(|| {
+            resolve_api_framework().and_then(|fw| {
+                ApiFramework::from_str(&fw, true)
+                    .ok()
+                    .map(|f| f.runtime().to_string())
+            })
+        })
         .unwrap_or_else(|| "go".into())
-}
-
-fn runtime_of(api_framework: &str) -> &'static str {
-    match api_framework {
-        "gin" | "echo" | "fiber" => "go",
-        "express" | "fastify" => "node",
-        "fastapi" | "flask" => "python",
-        _ => "go",
-    }
 }
 
 fn run_backend_dev(dir: &Path) -> Result<()> {
@@ -254,11 +252,9 @@ fn run_go(go_args: &[&str], extra: &[String], dir: &Path) -> Result<()> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn python_dev_args(api_framework: &str) -> Vec<&'static str> {
-    match api_framework {
-        "fastapi" => vec!["uvicorn", "main:app", "--reload"],
-        "flask" => vec!["flask", "run", "--debug"],
-        _ => vec!["main"],
-    }
+    ApiFramework::from_str(api_framework, true)
+        .map(|f| f.python_dev_args())
+        .unwrap_or_else(|_| vec!["main"])
 }
 
 fn run_python_module(module: &str, extra: &[String], dir: &Path) -> Result<()> {
@@ -284,10 +280,9 @@ fn run_python_module(module: &str, extra: &[String], dir: &Path) -> Result<()> {
 }
 
 fn dev_script(framework: &str) -> &'static str {
-    match framework {
-        "angular" => "start",
-        _ => "dev",
-    }
+    Frontend::from_str(framework, true)
+        .map(|f| f.dev_script())
+        .unwrap_or("dev")
 }
 
 fn build_script(_framework: &str) -> &'static str {

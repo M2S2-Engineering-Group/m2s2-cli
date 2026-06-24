@@ -8,6 +8,10 @@ pub struct M2S2Config {
     pub api_framework: Option<String>,
     pub project_type: Option<String>,
     pub runtime: Option<String>,
+    #[serde(default)]
+    pub auth: bool,
+    #[serde(default)]
+    pub billing: bool,
 }
 
 impl M2S2Config {

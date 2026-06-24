@@ -1,0 +1,29 @@
+import type { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import jwksClient from 'jwks-rsa';
+
+const client = jwksClient({
+  jwksUri: `https://cognito-idp.${process.env['AWS_REGION']}.amazonaws.com/${process.env['COGNITO_USER_POOL_ID']}/.well-known/jwks.json`,
+});
+
+function getKey(header: jwt.JwtHeader, callback: jwt.SigningKeyCallback) {
+  client.getSigningKey(header.kid, (err, key) => {
+    callback(err, key?.getPublicKey());
+  });
+}
+
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  jwt.verify(token, getKey, { algorithms: ['RS256'] }, (err, decoded) => {
+    if (err) {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+    (req as Request & { user: unknown }).user = decoded;
+    next();
+  });
+}

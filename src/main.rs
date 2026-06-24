@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod npm;
 mod scaffold;
+mod types;
 mod utils;
 
 use anyhow::{Context, Result, bail};

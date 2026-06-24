@@ -3,7 +3,9 @@ name = "{{name}}"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "flask>=3.1.0",
+    "flask>=3.1.0",{{#if auth}}
+    "python-jose[cryptography]>=3.3.0",{{/if}}{{#if billing}}
+    "stripe>=11.0.0",{{/if}}
 ]
 
 [tool.ruff]

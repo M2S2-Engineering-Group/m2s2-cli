@@ -1,0 +1,24 @@
+import os
+import stripe
+from flask import Blueprint, request, jsonify
+
+bp = Blueprint("stripe_webhook", __name__, url_prefix="/webhooks")
+stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+_webhook_secret = os.environ["STRIPE_WEBHOOK_SECRET"]
+
+
+@bp.route("/stripe", methods=["POST"])
+def stripe_webhook():
+    try:
+        event = stripe.Webhook.construct_event(
+            request.get_data(), request.headers.get("Stripe-Signature"), _webhook_secret
+        )
+    except stripe.SignatureVerificationError:
+        return jsonify({"error": "invalid signature"}), 400
+
+    if event["type"] == "checkout.session.completed":
+        pass  # TODO: provision access for the customer
+    elif event["type"] == "customer.subscription.deleted":
+        pass  # TODO: revoke access for the customer
+
+    return jsonify({"received": True})

@@ -1,0 +1,28 @@
+import type { Request, Response } from 'express';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env['STRIPE_SECRET_KEY'] as string);
+const webhookSecret = process.env['STRIPE_WEBHOOK_SECRET'] as string;
+
+export function stripeWebhook(req: Request, res: Response) {
+  const sig = req.headers['stripe-signature'] as string;
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+  } catch (err) {
+    res.status(400).send(`Webhook error: ${(err as Error).message}`);
+    return;
+  }
+
+  switch (event.type) {
+    case 'checkout.session.completed':
+      // TODO: provision access for the customer
+      break;
+    case 'customer.subscription.deleted':
+      // TODO: revoke access for the customer
+      break;
+  }
+
+  res.json({ received: true });
+}

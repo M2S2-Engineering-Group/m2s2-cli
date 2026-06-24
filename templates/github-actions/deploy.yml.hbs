@@ -1,0 +1,75 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+{{#if has_frontend}}
+  build-frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+{{#if is_fullstack}}
+    defaults:
+      run:
+        working-directory: apps/web
+{{/if}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "{{node_version}}"
+          cache: npm
+{{#if is_fullstack}}
+          cache-dependency-path: apps/web/package-lock.json
+{{/if}}
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: {{#if is_fullstack}}apps/web/dist{{else}}dist{{/if}}
+
+{{/if}}
+  deploy:
+    name: CDK deploy
+    runs-on: ubuntu-latest
+{{#if has_frontend}}
+    needs: [build-frontend]
+{{/if}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "{{node_version}}"
+          cache: npm
+          cache-dependency-path: cdk/package-lock.json
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: $\{{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: $\{{ vars.AWS_REGION }}
+{{#if has_frontend}}
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: {{#if is_fullstack}}apps/web/dist{{else}}dist{{/if}}
+{{/if}}
+{{#if backend_runtime_go}}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "{{go_version}}"
+      - name: Build Go binary
+        run: GOOS=linux GOARCH=arm64 go build -o bootstrap ./...
+{{#if is_fullstack}}
+        working-directory: apps/api
+{{/if}}
+{{/if}}
+      - run: npm ci
+        working-directory: cdk
+      - run: npx cdk deploy --all --require-approval never
+        working-directory: cdk

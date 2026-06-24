@@ -1,6 +1,13 @@
+pub mod scaffolder;
+
+pub use scaffolder::Scaffolder;
+
+use crate::types::Runtime;
+use crate::utils::to_pascal_case;
 use anyhow::{Context, Result};
 use console::style;
 use handlebars::Handlebars;
+use indicatif::ProgressBar;
 use rust_embed::Embed;
 use serde_json::{Value, json};
 use std::fs;
@@ -9,6 +16,8 @@ use std::path::Path;
 #[derive(Embed)]
 #[folder = "templates/"]
 struct Templates;
+
+// ── Public template helpers (used by generate commands) ──────────────────────
 
 pub fn get_template(path: &str) -> Option<String> {
     Templates::get(path).and_then(|f| {
@@ -24,7 +33,6 @@ pub fn render(raw: &str, data: &Value) -> Result<String> {
     hbs.render_template(raw, data).map_err(Into::into)
 }
 
-/// Render and write a set of template files into `out_dir`, printing each created path.
 pub fn write_files(out_dir: &Path, files: &[(&str, &str)], data: &Value) -> Result<()> {
     for (template_path, file_name) in files {
         let raw = get_template(template_path)
@@ -37,50 +45,188 @@ pub fn write_files(out_dir: &Path, files: &[(&str, &str)], data: &Value) -> Resu
     Ok(())
 }
 
-pub struct ScaffoldContext {
-    pub name: String,
-    pub project_type: String,
-    pub framework: Option<String>,
-    pub api_framework: Option<String>,
-    pub versions: serde_json::Map<String, Value>,
+// ── ScaffoldPlan ─────────────────────────────────────────────────────────────
+
+pub enum ScaffoldPlan {
+    Frontend(Scaffolder),
+    Backend(Scaffolder),
+    /// Fullstack composes two scaffolders: frontend into `apps/web`, backend into `apps/api`.
+    Fullstack(Scaffolder, Scaffolder),
 }
 
-pub fn run(ctx: &ScaffoldContext) -> Result<()> {
-    let data = build_data(ctx);
+impl ScaffoldPlan {
+    pub async fn execute(
+        &self,
+        name: &str,
+        offline: bool,
+        skip_install: bool,
+        spinner: &ProgressBar,
+    ) -> Result<()> {
+        let root = Path::new(name);
 
-    match ctx.project_type.as_str() {
-        "frontend" => {
-            let fw = ctx.framework.as_deref().unwrap();
-            scaffold_into(Path::new(&ctx.name), fw, &data)?;
+        match self {
+            ScaffoldPlan::Frontend(fe) => {
+                let versions = if offline {
+                    offline_versions()
+                } else {
+                    fe.resolve_versions().await?
+                };
+                let data = build_data(name, versions, Some(fe), None);
+                spinner.set_message("Writing project files…");
+                scaffold_into(root, fe.template_prefix, &data)?;
+                if fe.auth {
+                    scaffold_into(root, &format!("auth/{}", fe.template_prefix), &data)?;
+                }
+                if fe.billing {
+                    scaffold_into(root, &format!("billing/{}", fe.template_prefix), &data)?;
+                }
+                scaffold_into(&root.join("cdk"), "cdk", &data)?;
+                if fe.auth {
+                    scaffold_into(&root.join("cdk"), "cdk-auth", &data)?;
+                }
+                if fe.billing {
+                    scaffold_into(&root.join("cdk"), "cdk-billing", &data)?;
+                }
+                scaffold_into(&root.join(".github/workflows"), "github-actions", &data)?;
+                scaffold_into(root, "root", &data)?;
+                if !skip_install {
+                    fe.install(root, spinner).await?;
+                }
+            }
+
+            ScaffoldPlan::Backend(be) => {
+                let versions = if offline {
+                    offline_versions()
+                } else {
+                    be.resolve_versions().await?
+                };
+                let data = build_data(name, versions, None, Some(be));
+                spinner.set_message("Writing project files…");
+                scaffold_into(root, be.template_prefix, &data)?;
+                if be.auth {
+                    scaffold_into(root, &format!("auth/{}", be.template_prefix), &data)?;
+                }
+                if be.billing {
+                    scaffold_into(root, &format!("billing/{}", be.template_prefix), &data)?;
+                }
+                scaffold_into(&root.join("cdk"), "cdk", &data)?;
+                if be.auth {
+                    scaffold_into(&root.join("cdk"), "cdk-auth", &data)?;
+                }
+                if be.billing {
+                    scaffold_into(&root.join("cdk"), "cdk-billing", &data)?;
+                }
+                scaffold_into(&root.join(".github/workflows"), "github-actions", &data)?;
+                scaffold_into(root, "root", &data)?;
+                if !skip_install {
+                    be.install(root, spinner).await?;
+                }
+            }
+
+            ScaffoldPlan::Fullstack(fe, be) => {
+                let versions = if offline {
+                    offline_versions()
+                } else {
+                    let mut v = fe.resolve_versions().await?;
+                    v.extend(be.resolve_versions().await?);
+                    v
+                };
+                let data = build_data(name, versions, Some(fe), Some(be));
+                spinner.set_message("Writing project files…");
+                scaffold_into(&root.join("apps/web"), fe.template_prefix, &data)?;
+                if fe.auth {
+                    scaffold_into(
+                        &root.join("apps/web"),
+                        &format!("auth/{}", fe.template_prefix),
+                        &data,
+                    )?;
+                }
+                if fe.billing {
+                    scaffold_into(
+                        &root.join("apps/web"),
+                        &format!("billing/{}", fe.template_prefix),
+                        &data,
+                    )?;
+                }
+                scaffold_into(&root.join("apps/api"), be.template_prefix, &data)?;
+                if be.auth {
+                    scaffold_into(
+                        &root.join("apps/api"),
+                        &format!("auth/{}", be.template_prefix),
+                        &data,
+                    )?;
+                }
+                if be.billing {
+                    scaffold_into(
+                        &root.join("apps/api"),
+                        &format!("billing/{}", be.template_prefix),
+                        &data,
+                    )?;
+                }
+                scaffold_into(root, "fullstack", &data)?;
+                scaffold_into(&root.join("cdk"), "cdk", &data)?;
+                if fe.auth {
+                    scaffold_into(&root.join("cdk"), "cdk-auth", &data)?;
+                }
+                if fe.billing {
+                    scaffold_into(&root.join("cdk"), "cdk-billing", &data)?;
+                }
+                scaffold_into(&root.join(".github/workflows"), "github-actions", &data)?;
+                scaffold_into(root, "root", &data)?;
+                if !skip_install {
+                    fe.install(&root.join("apps/web"), spinner).await?;
+                    be.install(&root.join("apps/api"), spinner).await?;
+                }
+            }
         }
-        "backend" => {
-            let api_fw = ctx.api_framework.as_deref().unwrap();
-            scaffold_into(Path::new(&ctx.name), api_fw, &data)?;
-        }
-        "fullstack" => {
-            let fw = ctx.framework.as_deref().unwrap();
-            let api_fw = ctx.api_framework.as_deref().unwrap();
-            scaffold_into(&Path::new(&ctx.name).join("apps/web"), fw, &data)?;
-            scaffold_into(&Path::new(&ctx.name).join("apps/api"), api_fw, &data)?;
-            scaffold_into(Path::new(&ctx.name), "fullstack", &data)?;
-        }
-        _ => unreachable!(),
+
+        Ok(())
     }
-
-    Ok(())
 }
 
-fn build_data(ctx: &ScaffoldContext) -> Value {
-    let mut data = json!({ "name": ctx.name });
-    for (k, v) in &ctx.versions {
-        data[k] = v.clone();
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+fn build_data(
+    name: &str,
+    versions: serde_json::Map<String, Value>,
+    frontend: Option<&Scaffolder>,
+    backend: Option<&Scaffolder>,
+) -> Value {
+    let auth = frontend
+        .map(|s| s.auth)
+        .or_else(|| backend.map(|s| s.auth))
+        .unwrap_or(false);
+    let billing = frontend
+        .map(|s| s.billing)
+        .or_else(|| backend.map(|s| s.billing))
+        .unwrap_or(false);
+    let backend_runtime = backend.and_then(|b| b.backend_runtime);
+
+    let mut data = json!({
+        "name": name,
+        "pascal_name": to_pascal_case(name),
+        "auth": auth,
+        "billing": billing,
+        "has_frontend": frontend.is_some(),
+        "has_backend": backend.is_some(),
+        "is_fullstack": frontend.is_some() && backend.is_some(),
+        "lambda_runtime": backend.map(|b| b.lambda_runtime.as_str()).unwrap_or(""),
+        "lambda_handler": backend.map(|b| b.lambda_handler.as_str()).unwrap_or(""),
+        "backend_runtime_go": backend_runtime == Some(Runtime::Go),
+        "backend_runtime_node": backend_runtime == Some(Runtime::Node),
+        "backend_runtime_python": backend_runtime == Some(Runtime::Python),
+        "go_version": scaffolder::runtimes().versions.go.as_str(),
+        "node_version": scaffolder::runtimes().versions.node.as_str(),
+        "python_version": scaffolder::runtimes().versions.python.as_str(),
+    });
+
+    for (k, v) in versions {
+        data[k] = v;
     }
-    if let Some(fw) = &ctx.framework {
-        data["frontend_dev_script"] = Value::String(if fw == "angular" {
-            "start".into()
-        } else {
-            "dev".into()
-        });
+    if let Some(fe) = frontend
+        && let Some(script) = fe.dev_script
+    {
+        data["frontend_dev_script"] = Value::String(script.to_string());
     }
     data
 }
@@ -100,14 +246,12 @@ fn scaffold_into(target: &Path, template_prefix: &str, data: &Value) -> Result<(
         if !path_str.starts_with(&prefix) {
             continue;
         }
-
-        // Skip generate/ subtree
         if path_str.contains("/generate/") {
             continue;
         }
 
         let relative = &path_str[prefix.len()..];
-        let (out_relative, render) = if let Some(stem) = relative.strip_suffix(".hbs") {
+        let (out_relative, do_render) = if let Some(stem) = relative.strip_suffix(".hbs") {
             (stem.to_string(), true)
         } else if let Some(stem) = relative.strip_prefix('_') {
             let dir = Path::new(relative)
@@ -125,7 +269,6 @@ fn scaffold_into(target: &Path, template_prefix: &str, data: &Value) -> Result<(
         };
 
         let out_path = target.join(&out_relative);
-
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -134,7 +277,7 @@ fn scaffold_into(target: &Path, template_prefix: &str, data: &Value) -> Result<(
         let raw = std::str::from_utf8(file.data.as_ref())
             .with_context(|| format!("template '{path_str}' is not valid UTF-8"))?;
 
-        let content = if render {
+        let content = if do_render {
             hbs.render_template(raw, data)
                 .with_context(|| format!("failed to render '{path_str}'"))?
         } else {
@@ -146,4 +289,74 @@ fn scaffold_into(target: &Path, template_prefix: &str, data: &Value) -> Result<(
     }
 
     Ok(())
+}
+
+pub fn offline_versions() -> serde_json::Map<String, serde_json::Value> {
+    let keys = [
+        "_angular_animations",
+        "_angular_build",
+        "_angular_cdk",
+        "_angular_cli",
+        "_angular_common",
+        "_angular_compiler",
+        "_angular_compiler_cli",
+        "_angular_core",
+        "_angular_forms",
+        "_angular_material",
+        "_angular_platform_browser",
+        "_angular_platform_browser_dynamic",
+        "_angular_router",
+        "_eslint_js",
+        "_testing_library_jest_dom",
+        "_testing_library_react",
+        "_testing_library_vue",
+        "_types_express",
+        "_types_jest",
+        "_types_node",
+        "_types_react",
+        "_types_react_dom",
+        "_vitejs_plugin_react",
+        "_vitejs_plugin_vue",
+        "angular_eslint",
+        "eslint",
+        "eslint_plugin_react_hooks",
+        "eslint_plugin_react_refresh",
+        "eslint_plugin_vue",
+        "express",
+        "fastify",
+        "jest",
+        "jest_preset_angular",
+        "jsdom",
+        "react",
+        "react_dom",
+        "react_router",
+        "rxjs",
+        "sass_embedded",
+        "tslib",
+        "tsx",
+        "typescript",
+        "typescript_eslint",
+        "vite",
+        "vitest",
+        "vue",
+        "vue_tsc",
+        "zone_js",
+        // auth packages
+        "aws_amplify",
+        "_aws_amplify_ui_react",
+        "_aws_amplify_ui_angular",
+        "_aws_amplify_ui_vue",
+        "jsonwebtoken",
+        "_types_jsonwebtoken",
+        "jwks_rsa",
+        "_fastify_jwt",
+        // billing packages
+        "_stripe_stripe_js",
+        "_stripe_react_stripe_js",
+        "stripe",
+    ];
+    let placeholder = serde_json::Value::String("0.0.0".into());
+    keys.iter()
+        .map(|k| (k.to_string(), placeholder.clone()))
+        .collect()
 }

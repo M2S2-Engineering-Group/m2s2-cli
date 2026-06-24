@@ -1,0 +1,29 @@
+import fp from 'fastify-plugin';
+import fastifyJwt from '@fastify/jwt';
+import jwksClient from 'jwks-rsa';
+import type { FastifyInstance } from 'fastify';
+
+const client = jwksClient({
+  jwksUri: `https://cognito-idp.${process.env['AWS_REGION']}.amazonaws.com/${process.env['COGNITO_USER_POOL_ID']}/.well-known/jwks.json`,
+});
+
+export default fp(async function authPlugin(app: FastifyInstance) {
+  app.register(fastifyJwt, {
+    secret: (_request, token) =>
+      new Promise((resolve, reject) => {
+        client.getSigningKey(token.header.kid, (err, key) => {
+          if (err) return reject(err);
+          resolve(key!.getPublicKey());
+        });
+      }),
+    algorithms: ['RS256'],
+  });
+
+  app.decorate('requireAuth', async (request: Parameters<typeof app.jwt.verify>[0], reply: { code: (n: number) => { send: (b: unknown) => void } }) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      reply.code(401).send({ error: 'Unauthorized' });
+    }
+  });
+});

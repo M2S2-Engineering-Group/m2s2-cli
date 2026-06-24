@@ -2,4 +2,8 @@ module {{name}}
 
 go 1.22
 
-require github.com/gin-gonic/gin v1.10.0
+require (
+	github.com/gin-gonic/gin v1.10.0{{#if auth}}
+	github.com/golang-jwt/jwt/v5 v5.2.1{{/if}}{{#if billing}}
+	github.com/stripe/stripe-go/v81 v81.1.0{{/if}}
+)

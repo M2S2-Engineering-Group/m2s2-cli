@@ -25,7 +25,10 @@
     "@m2s2/tokens": "^2.2.2",
     "rxjs": "~{{rxjs}}",
     "tslib": "^{{tslib}}",
-    "zone.js": "~{{zone_js}}"
+    "zone.js": "~{{zone_js}}"{{#if auth}},
+    "aws-amplify": "^{{aws_amplify}}",
+    "@aws-amplify/ui-angular": "^{{_aws_amplify_ui_angular}}"{{/if}}{{#if billing}},
+    "@stripe/stripe-js": "^{{_stripe_stripe_js}}"{{/if}}
   },
   "devDependencies": {
     "@angular/build": "^{{_angular_build}}",

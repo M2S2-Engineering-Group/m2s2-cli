@@ -1,13 +1,12 @@
 use crate::config::M2S2Config;
-use crate::npm;
-use crate::scaffold::{self, ScaffoldContext};
+use crate::scaffold::{ScaffoldPlan, Scaffolder};
+use crate::types::{ApiFramework, Frontend, ProjectType, Runtime};
 use anyhow::Result;
-use clap::Args;
+use clap::{Args, ValueEnum};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
-use inquire::Select;
+use inquire::{Confirm, Select};
 use std::time::Duration;
-use tokio::process::Command;
 
 const AFTER_HELP: &str = "\
 Examples:
@@ -30,7 +29,10 @@ Examples:
       Scaffold a React + Gin fullstack project, no prompts.
 
   m2s2 new my-app --project-type fullstack --framework vue --runtime python --api-framework fastapi
-      Scaffold a Vue + FastAPI fullstack project, no prompts.";
+      Scaffold a Vue + FastAPI fullstack project, no prompts.
+
+  m2s2 new my-app --project-type fullstack --framework angular --api-framework gin --auth yes --billing yes
+      Scaffold a fullstack project with Cognito auth and Stripe billing.";
 
 #[derive(Args)]
 #[command(after_help = AFTER_HELP)]
@@ -39,20 +41,28 @@ pub struct NewArgs {
     pub name: String,
 
     /// Project type
-    #[arg(long, value_parser = ["frontend", "backend", "fullstack"])]
-    pub project_type: Option<String>,
+    #[arg(long)]
+    pub project_type: Option<ProjectType>,
 
     /// Frontend framework
-    #[arg(long, value_parser = ["react", "angular", "vue"])]
-    pub framework: Option<String>,
+    #[arg(long)]
+    pub framework: Option<Frontend>,
 
     /// Backend runtime
-    #[arg(long, value_parser = ["go", "node", "python"])]
-    pub runtime: Option<String>,
+    #[arg(long)]
+    pub runtime: Option<Runtime>,
 
     /// API framework — gin/echo/fiber (Go), express/fastify (Node), fastapi/flask (Python)
-    #[arg(long, value_parser = ["gin", "echo", "fiber", "express", "fastify", "fastapi", "flask"])]
-    pub api_framework: Option<String>,
+    #[arg(long)]
+    pub api_framework: Option<ApiFramework>,
+
+    /// Include AWS Cognito authentication scaffolding
+    #[arg(long, value_parser = ["yes", "no"])]
+    pub auth: Option<String>,
+
+    /// Include Stripe billing scaffolding
+    #[arg(long, value_parser = ["yes", "no"])]
+    pub billing: Option<String>,
 
     /// Skip running npm install / go mod tidy / pip install after scaffolding
     #[arg(long)]
@@ -64,53 +74,88 @@ pub struct NewArgs {
 }
 
 pub async fn run(args: NewArgs) -> Result<()> {
+    // ── Prompt for choices ────────────────────────────────────────────────────
+
     let project_type = match args.project_type {
         Some(t) => t,
-        None => Select::new("Project type?", vec!["frontend", "backend", "fullstack"])
-            .prompt()
-            .map(|s| s.to_string())?,
+        None => Select::new("Project type?", ProjectType::value_variants().to_vec()).prompt()?,
     };
 
-    let framework = if project_type != "backend" {
+    let framework = if project_type != ProjectType::Backend {
         Some(match args.framework {
             Some(f) => f,
-            None => Select::new("Frontend framework?", vec!["react", "angular", "vue"])
-                .prompt()
-                .map(|s| s.to_string())?,
+            None => {
+                Select::new("Frontend framework?", Frontend::value_variants().to_vec()).prompt()?
+            }
         })
     } else {
         None
     };
 
-    let (runtime, api_framework) = if project_type != "frontend" {
-        // If --api-framework was given, derive runtime from it
+    let (runtime, api_framework) = if project_type != ProjectType::Frontend {
         if let Some(fw) = args.api_framework {
-            let rt = args.runtime.unwrap_or_else(|| runtime_of(&fw).to_string());
+            let rt = args.runtime.unwrap_or_else(|| fw.runtime());
             (Some(rt), Some(fw))
         } else {
             let rt = match args.runtime {
                 Some(r) => r,
-                None => Select::new("Backend runtime?", vec!["Go", "Node", "Python"])
-                    .prompt()
-                    .map(|s| s.to_lowercase())?,
+                None => {
+                    Select::new("Backend runtime?", Runtime::value_variants().to_vec()).prompt()?
+                }
             };
-            let fw = Select::new("API framework?", frameworks_for_runtime(&rt))
-                .prompt()
-                .map(|s| s.to_string())?;
+            let fw = Select::new("API framework?", rt.api_frameworks()).prompt()?;
             (Some(rt), Some(fw))
         }
     } else {
         (None, None)
     };
 
-    let label = match project_type.as_str() {
-        "fullstack" => format!(
-            "{} + {}",
-            framework.as_deref().unwrap(),
-            api_framework.as_deref().unwrap()
+    let auth = match args.auth.as_deref() {
+        Some("yes") => true,
+        Some("no") => false,
+        _ => Confirm::new("Include authentication (AWS Cognito)?")
+            .with_default(false)
+            .prompt()?,
+    };
+
+    let billing = match args.billing.as_deref() {
+        Some("yes") => true,
+        Some("no") => false,
+        _ => Confirm::new("Include billing (Stripe)?")
+            .with_default(false)
+            .prompt()?,
+    };
+
+    // ── Capture config strings before values are consumed into the plan ───────
+
+    let config_framework = framework.as_ref().map(|f| f.to_string());
+    let config_api_framework = api_framework.as_ref().map(|f| f.to_string());
+    let config_project_type = project_type.to_string();
+    let config_runtime = runtime.as_ref().map(|r| r.to_string());
+
+    // ── Build plan ────────────────────────────────────────────────────────────
+
+    let plan = match project_type {
+        ProjectType::Frontend => {
+            ScaffoldPlan::Frontend(Scaffolder::for_frontend(framework.unwrap(), auth, billing))
+        }
+        ProjectType::Backend => ScaffoldPlan::Backend(Scaffolder::for_backend(
+            api_framework.unwrap(),
+            auth,
+            billing,
+        )),
+        ProjectType::Fullstack => ScaffoldPlan::Fullstack(
+            Scaffolder::for_frontend(framework.unwrap(), auth, billing),
+            Scaffolder::for_backend(api_framework.unwrap(), auth, billing),
         ),
-        "frontend" => framework.as_deref().unwrap().to_string(),
-        _ => api_framework.as_deref().unwrap().to_string(),
+    };
+
+    let label = match &plan {
+        ScaffoldPlan::Frontend(fe) => fe.template_prefix.to_string(),
+        ScaffoldPlan::Backend(be) => be.template_prefix.to_string(),
+        ScaffoldPlan::Fullstack(fe, be) => {
+            format!("{} + {}", fe.template_prefix, be.template_prefix)
+        }
     };
 
     println!(
@@ -120,6 +165,8 @@ pub async fn run(args: NewArgs) -> Result<()> {
         style(&label).cyan(),
     );
 
+    // ── Execute ───────────────────────────────────────────────────────────────
+
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -128,126 +175,27 @@ pub async fn run(args: NewArgs) -> Result<()> {
     );
     spinner.enable_steady_tick(Duration::from_millis(80));
 
-    let versions = if args.offline {
-        offline_versions()
-    } else {
-        let mut v = if project_type != "backend" {
-            spinner.set_message("Resolving frontend package versions…");
-            resolve_frontend_versions(framework.as_deref().unwrap()).await?
-        } else {
-            Default::default()
-        };
+    if !args.offline {
+        spinner.set_message("Resolving package versions…");
+    }
 
-        if project_type != "frontend"
-            && let Some(rt) = runtime.as_deref()
-            && let Some(api_fw) = api_framework.as_deref()
-        {
-            spinner.set_message("Resolving backend package versions…");
-            let bv = resolve_backend_versions(rt, api_fw).await?;
-            v.extend(bv);
-        }
-        v
-    };
+    plan.execute(&args.name, args.offline, args.skip_install, &spinner)
+        .await?;
 
-    spinner.set_message("Writing project files…");
-
-    scaffold::run(&ScaffoldContext {
-        name: args.name.clone(),
-        project_type: project_type.clone(),
-        framework: framework.clone(),
-        api_framework: api_framework.clone(),
-        versions,
-    })?;
+    // ── Save config ───────────────────────────────────────────────────────────
 
     let prev = std::env::current_dir()?;
     std::env::set_current_dir(&args.name)?;
     let _ = M2S2Config {
-        framework: framework.clone(),
-        api_framework: api_framework.clone(),
-        project_type: Some(project_type.clone()),
-        runtime: runtime.clone(),
+        framework: config_framework,
+        api_framework: config_api_framework,
+        project_type: Some(config_project_type),
+        runtime: config_runtime,
+        auth,
+        billing,
     }
     .save();
     std::env::set_current_dir(&prev)?;
-
-    if !args.skip_install {
-        let web_dir = match project_type.as_str() {
-            "fullstack" => Some(format!("{}/apps/web", args.name)),
-            "frontend" => Some(args.name.clone()),
-            _ => None,
-        };
-
-        if let Some(dir) = web_dir {
-            spinner.set_message("Running npm install…");
-            let status = Command::new("npm")
-                .arg("install")
-                .current_dir(&dir)
-                .status()
-                .await?;
-            if !status.success() {
-                spinner.finish_and_clear();
-                anyhow::bail!("npm install failed");
-            }
-        }
-
-        let api_dir = match project_type.as_str() {
-            "fullstack" => Some(format!("{}/apps/api", args.name)),
-            "backend" => Some(args.name.clone()),
-            _ => None,
-        };
-
-        if let Some(dir) = api_dir {
-            match runtime.as_deref() {
-                Some("go") => {
-                    spinner.set_message("Running go mod tidy…");
-                    let status = Command::new("go")
-                        .args(["mod", "tidy"])
-                        .current_dir(&dir)
-                        .status()
-                        .await?;
-                    if !status.success() {
-                        spinner.finish_and_clear();
-                        anyhow::bail!("go mod tidy failed");
-                    }
-                }
-                Some("node") => {
-                    spinner.set_message("Running npm install (API)…");
-                    let status = Command::new("npm")
-                        .arg("install")
-                        .current_dir(&dir)
-                        .status()
-                        .await?;
-                    if !status.success() {
-                        spinner.finish_and_clear();
-                        anyhow::bail!("npm install (API) failed");
-                    }
-                }
-                Some("python") => {
-                    spinner.set_message("Creating virtual environment…");
-                    let status = Command::new("python3")
-                        .args(["-m", "venv", ".venv"])
-                        .current_dir(&dir)
-                        .status()
-                        .await?;
-                    if !status.success() {
-                        spinner.finish_and_clear();
-                        anyhow::bail!("python3 -m venv failed");
-                    }
-                    spinner.set_message("Running pip install…");
-                    let status = Command::new(".venv/bin/pip")
-                        .args(["install", "-r", "requirements.txt"])
-                        .current_dir(&dir)
-                        .status()
-                        .await?;
-                    if !status.success() {
-                        spinner.finish_and_clear();
-                        anyhow::bail!("pip install failed");
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
 
     spinner.finish_and_clear();
 
@@ -257,177 +205,4 @@ pub async fn run(args: NewArgs) -> Result<()> {
     println!();
 
     Ok(())
-}
-
-fn runtime_of(api_framework: &str) -> &'static str {
-    match api_framework {
-        "gin" | "echo" | "fiber" => "go",
-        "express" | "fastify" => "node",
-        "fastapi" | "flask" => "python",
-        _ => "go",
-    }
-}
-
-fn frameworks_for_runtime(runtime: &str) -> Vec<&'static str> {
-    match runtime {
-        "go" => vec!["gin", "echo", "fiber"],
-        "node" => vec!["express", "fastify"],
-        "python" => vec!["fastapi", "flask"],
-        _ => vec![],
-    }
-}
-
-fn offline_versions() -> serde_json::Map<String, serde_json::Value> {
-    let keys = [
-        "_angular_animations",
-        "_angular_build",
-        "_angular_cdk",
-        "_angular_cli",
-        "_angular_common",
-        "_angular_compiler",
-        "_angular_compiler_cli",
-        "_angular_core",
-        "_angular_forms",
-        "_angular_material",
-        "_angular_platform_browser",
-        "_angular_platform_browser_dynamic",
-        "_angular_router",
-        "_eslint_js",
-        "_testing_library_jest_dom",
-        "_testing_library_react",
-        "_testing_library_vue",
-        "_types_express",
-        "_types_jest",
-        "_types_node",
-        "_types_react",
-        "_types_react_dom",
-        "_vitejs_plugin_react",
-        "_vitejs_plugin_vue",
-        "angular_eslint",
-        "eslint",
-        "eslint_plugin_react_hooks",
-        "eslint_plugin_react_refresh",
-        "eslint_plugin_vue",
-        "express",
-        "fastify",
-        "jest",
-        "jest_preset_angular",
-        "jsdom",
-        "react",
-        "react_dom",
-        "react_router",
-        "rxjs",
-        "sass_embedded",
-        "tslib",
-        "tsx",
-        "typescript",
-        "typescript_eslint",
-        "vite",
-        "vitest",
-        "vue",
-        "vue_tsc",
-        "zone_js",
-    ];
-    let placeholder = serde_json::Value::String("0.0.0".into());
-    keys.iter()
-        .map(|k| (k.to_string(), placeholder.clone()))
-        .collect()
-}
-
-async fn resolve_frontend_versions(
-    framework: &str,
-) -> Result<serde_json::Map<String, serde_json::Value>> {
-    match framework {
-        "angular" => {
-            npm::resolve_for_framework(
-                "@m2s2/ng-lib",
-                &[
-                    "rxjs",
-                    "zone.js",
-                    "typescript",
-                    "tslib",
-                    "jest",
-                    "jest-preset-angular",
-                    "@types/jest",
-                    "eslint",
-                    "@eslint/js",
-                    "typescript-eslint",
-                    "angular-eslint",
-                ],
-            )
-            .await
-        }
-        "react" => {
-            npm::resolve_for_framework(
-                "@m2s2/react-lib",
-                &[
-                    "typescript",
-                    "vite",
-                    "vitest",
-                    "@types/react",
-                    "@types/react-dom",
-                    "@vitejs/plugin-react",
-                    "@testing-library/react",
-                    "@testing-library/jest-dom",
-                    "jsdom",
-                    "sass-embedded",
-                    "eslint",
-                    "@eslint/js",
-                    "typescript-eslint",
-                    "eslint-plugin-react-hooks",
-                    "eslint-plugin-react-refresh",
-                ],
-            )
-            .await
-        }
-        "vue" => {
-            npm::resolve_for_framework(
-                "@m2s2/vue-lib",
-                &[
-                    "typescript",
-                    "vite",
-                    "vitest",
-                    "@vitejs/plugin-vue",
-                    "@testing-library/vue",
-                    "@testing-library/jest-dom",
-                    "jsdom",
-                    "vue-tsc",
-                    "sass-embedded",
-                    "eslint",
-                    "@eslint/js",
-                    "typescript-eslint",
-                    "eslint-plugin-vue",
-                ],
-            )
-            .await
-        }
-        _ => Ok(Default::default()),
-    }
-}
-
-async fn resolve_backend_versions(
-    runtime: &str,
-    api_framework: &str,
-) -> Result<serde_json::Map<String, serde_json::Value>> {
-    match runtime {
-        "node" => {
-            let base = &[
-                "@types/node",
-                "tsx",
-                "typescript",
-                "vitest",
-                "eslint",
-                "@eslint/js",
-                "typescript-eslint",
-            ];
-            let extra: &[&str] = match api_framework {
-                "express" => &["express", "@types/express"],
-                "fastify" => &["fastify"],
-                _ => &[],
-            };
-            let all: Vec<&str> = base.iter().chain(extra.iter()).copied().collect();
-            npm::resolve_packages(&all).await
-        }
-        _ => Ok(Default::default()),
-    }
 }

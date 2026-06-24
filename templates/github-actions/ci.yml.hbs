@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+{{#if has_frontend}}
+  frontend:
+    name: Frontend — lint, build, test
+    runs-on: ubuntu-latest
+{{#if is_fullstack}}
+    defaults:
+      run:
+        working-directory: apps/web
+{{/if}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "{{node_version}}"
+          cache: npm
+{{#if is_fullstack}}
+          cache-dependency-path: apps/web/package-lock.json
+{{/if}}
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+{{/if}}
+{{#if has_backend}}
+  backend:
+    name: Backend — lint, build, test
+    runs-on: ubuntu-latest
+{{#if is_fullstack}}
+    defaults:
+      run:
+        working-directory: apps/api
+{{/if}}
+    steps:
+      - uses: actions/checkout@v4
+{{#if backend_runtime_go}}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "{{go_version}}"
+{{#if is_fullstack}}
+          cache-dependency-path: apps/api/go.sum
+{{/if}}
+      - run: go build ./...
+      - run: go test ./...
+{{/if}}
+{{#if backend_runtime_node}}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "{{node_version}}"
+          cache: npm
+{{#if is_fullstack}}
+          cache-dependency-path: apps/api/package-lock.json
+{{/if}}
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+{{/if}}
+{{#if backend_runtime_python}}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "{{python_version}}"
+      - run: pip install -r requirements.txt
+      - run: pytest
+{{/if}}
+
+{{/if}}
+  cdk-synth:
+    name: CDK synth
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "{{node_version}}"
+          cache: npm
+          cache-dependency-path: cdk/package-lock.json
+      - run: npm ci
+      - run: npx cdk synth

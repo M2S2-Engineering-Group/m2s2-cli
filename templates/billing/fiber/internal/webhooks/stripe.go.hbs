@@ -1,0 +1,27 @@
+package webhooks
+
+import (
+	"os"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/webhook"
+)
+
+func StripeWebhook(c *fiber.Ctx) error {
+	event, err := webhook.ConstructEvent(c.Body(), c.Get("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
+
+	switch event.Type {
+	case "checkout.session.completed":
+		// TODO: provision access for the customer
+	case "customer.subscription.deleted":
+		// TODO: revoke access for the customer
+	}
+
+	return c.JSON(fiber.Map{"received": true})
+}

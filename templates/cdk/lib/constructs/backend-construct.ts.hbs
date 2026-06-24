@@ -1,0 +1,53 @@
+import * as cdk from 'aws-cdk-lib';
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { Construct } from 'constructs';
+
+{{#if auth}}
+interface BackendConstructProps {
+  userPool: cognito.UserPool;
+}
+{{/if}}
+
+export class BackendConstruct extends Construct {
+  readonly apiEndpoint: string;
+
+  constructor(scope: Construct, id: string{{#if auth}}, props: BackendConstructProps{{/if}}) {
+    super(scope, id);
+
+    const fn = new lambda.Function(this, 'ApiFunction', {
+      runtime: {{lambda_runtime}},
+      handler: '{{lambda_handler}}',
+      code: lambda.Code.fromAsset('{{#if has_frontend}}../apps/api{{else}}..{{/if}}'),
+      environment: {
+        NODE_ENV: 'production',
+        {{#if auth}}
+        COGNITO_USER_POOL_ID: {{#if auth}}props.userPool.userPoolId{{else}}''{{/if}},
+        {{/if}}
+      },
+    });
+
+    {{#if auth}}
+    props.userPool.grant(fn, 'cognito-idp:GetUser');
+    {{/if}}
+
+    const api = new apigwv2.HttpApi(this, 'HttpApi', {
+      corsPreflight: {
+        allowOrigins: ['*'],
+        allowMethods: [apigwv2.CorsHttpMethod.ANY],
+        allowHeaders: ['Content-Type', 'Authorization'],
+      },
+    });
+
+    api.addRoutes({
+      path: '/{proxy+}',
+      methods: [apigwv2.HttpMethod.ANY],
+      integration: new integrations.HttpLambdaIntegration('ApiIntegration', fn),
+    });
+
+    this.apiEndpoint = api.apiEndpoint;
+    new cdk.CfnOutput(this, 'ApiEndpoint', { value: api.apiEndpoint });
+  }
+}

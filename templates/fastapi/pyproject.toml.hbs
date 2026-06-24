@@ -4,7 +4,9 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
+    "uvicorn[standard]>=0.32.0",{{#if auth}}
+    "python-jose[cryptography]>=3.3.0",{{/if}}{{#if billing}}
+    "stripe>=11.0.0",{{/if}}
 ]
 
 [tool.ruff]

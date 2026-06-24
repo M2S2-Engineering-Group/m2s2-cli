@@ -1,0 +1,36 @@
+package webhooks
+
+import (
+	"io"
+	"net/http"
+	"os"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/webhook"
+)
+
+func StripeWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+
+	event, err := webhook.ConstructEvent(body, c.GetHeader("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
+
+	switch event.Type {
+	case "checkout.session.completed":
+		// TODO: provision access for the customer
+	case "customer.subscription.deleted":
+		// TODO: revoke access for the customer
+	}
+
+	c.JSON(http.StatusOK, gin.H{"received": true})
+}

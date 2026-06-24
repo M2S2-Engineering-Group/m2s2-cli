@@ -1,0 +1,9 @@
+<m2s2-page-header [config]="hero" />
+
+<section class="features">
+  @for (f of features; track f.title) {
+    <m2s2-feature-card [config]="f" />
+  }
+</section>
+
+<m2s2-cta-section [config]="cta" />

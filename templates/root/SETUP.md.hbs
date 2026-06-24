@@ -1,0 +1,189 @@
+# {{name}} — Setup Guide
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) v{{node_version}}+ (required for CDK)
+- [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
+- [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html) (`npm install -g aws-cdk`)
+{{#if backend_runtime_go}}
+- [Go](https://golang.org/) v{{go_version}}+
+{{/if}}
+{{#if backend_runtime_python}}
+- [Python](https://python.org/) v{{python_version}}+
+{{/if}}
+{{#if auth}}
+- AWS Cognito User Pool (created via `cdk deploy` or manually — see [Auth Setup](#auth-setup))
+{{/if}}
+{{#if billing}}
+- [Stripe](https://stripe.com) account and API keys (see [Billing Setup](#billing-setup))
+{{/if}}
+
+## Local Development
+
+{{#if has_frontend}}
+### Frontend
+
+```bash
+{{#if is_fullstack}}
+cd apps/web
+{{/if}}
+npm install
+npm run {{frontend_dev_script}}
+```
+
+{{/if}}
+{{#if has_backend}}
+### Backend
+
+{{#if backend_runtime_go}}
+```bash
+{{#if is_fullstack}}
+cd apps/api
+{{/if}}
+go mod tidy
+make dev
+```
+{{/if}}
+{{#if backend_runtime_node}}
+```bash
+{{#if is_fullstack}}
+cd apps/api
+{{/if}}
+npm install
+make dev
+```
+{{/if}}
+{{#if backend_runtime_python}}
+```bash
+{{#if is_fullstack}}
+cd apps/api
+{{/if}}
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+make dev
+```
+{{/if}}
+
+### Environment variables
+
+```bash
+{{#if is_fullstack}}
+cp apps/api/.env.example apps/api/.env
+{{else}}
+cp .env.example .env
+{{/if}}
+```
+
+Edit the `.env` file and fill in the required values.
+
+{{/if}}
+{{#if is_fullstack}}
+### Run everything
+
+From the project root:
+
+```bash
+make dev       # starts frontend and backend concurrently
+make dev-web   # frontend only
+make dev-api   # backend only
+```
+
+{{/if}}
+## CDK Infrastructure
+
+### Bootstrap (first time only per AWS account/region)
+
+```bash
+cd cdk
+npm install
+npx cdk bootstrap
+```
+
+### Preview changes
+
+```bash
+cd cdk && npx cdk synth
+```
+
+### Deploy
+
+```bash
+cd cdk && npx cdk deploy --all
+```
+
+{{#if auth}}
+## Auth Setup
+
+This project uses AWS Cognito for authentication. The CDK stack provisions a User Pool automatically on first deploy.
+
+After deploying, add the following to your environment:
+{{#if has_frontend}}
+
+**Frontend** (`.env`{{#if is_fullstack}} inside `apps/web/`{{/if}}):
+```
+VITE_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
+VITE_COGNITO_CLIENT_ID=XXXXXXXXXXXXXXXXXXXXXXXXXX
+VITE_COGNITO_DOMAIN=https://your-domain.auth.us-east-1.amazoncognito.com
+```
+{{/if}}
+{{#if has_backend}}
+
+**Backend** (`.env`{{#if is_fullstack}} inside `apps/api/`{{/if}}):
+```
+COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
+COGNITO_CLIENT_ID=XXXXXXXXXXXXXXXXXXXXXXXXXX
+AWS_REGION=us-east-1
+```
+{{/if}}
+
+{{/if}}
+{{#if billing}}
+## Billing Setup
+
+This project uses Stripe for payments.
+
+1. Obtain your API keys from the [Stripe Dashboard](https://dashboard.stripe.com/apikeys).
+2. Add the following to your environment:
+{{#if has_frontend}}
+
+**Frontend** (`.env`{{#if is_fullstack}} inside `apps/web/`{{/if}}):
+```
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_XXXXXXXXXX
+```
+{{/if}}
+{{#if has_backend}}
+
+**Backend** (`.env`{{#if is_fullstack}} inside `apps/api/`{{/if}}):
+```
+STRIPE_SECRET_KEY=sk_test_XXXXXXXXXX
+STRIPE_WEBHOOK_SECRET=whsec_XXXXXXXXXX
+```
+{{/if}}
+
+3. For local webhook testing, use the [Stripe CLI](https://stripe.com/docs/stripe-cli):
+
+```bash
+stripe listen --forward-to localhost:8080/webhooks/stripe
+```
+
+{{/if}}
+## CI/CD
+
+Two GitHub Actions workflows are included under `.github/workflows/`:
+
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `ci.yml` | Pull request → `main` | Lint, build, test, CDK synth |
+| `deploy.yml` | Push → `main` | Build artifacts, CDK deploy |
+
+### Required GitHub secrets and variables
+
+| Name | Type | Description |
+|------|------|-------------|
+| `AWS_DEPLOY_ROLE_ARN` | Secret | IAM role ARN for OIDC-based deployment |
+| `AWS_REGION` | Variable | Target AWS region (e.g. `us-east-1`) |
+
+Configure these under **Settings → Secrets and variables → Actions** in your repository.
+
+The deploy workflow uses OpenID Connect (OIDC) — no long-lived AWS credentials are stored in GitHub.

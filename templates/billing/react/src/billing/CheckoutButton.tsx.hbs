@@ -1,0 +1,30 @@
+import { useState } from 'react';
+import { stripePromise } from './stripe';
+
+interface CheckoutButtonProps {
+  priceId: string;
+  label?: string;
+}
+
+export function CheckoutButton({ priceId, label = 'Subscribe' }: CheckoutButtonProps) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    setLoading(true);
+    const stripe = await stripePromise;
+    const res = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId }),
+    });
+    const { sessionId } = await res.json();
+    await stripe?.redirectToCheckout({ sessionId });
+    setLoading(false);
+  }
+
+  return (
+    <button onClick={handleClick} disabled={loading}>
+      {loading ? 'Loading…' : label}
+    </button>
+  );
+}

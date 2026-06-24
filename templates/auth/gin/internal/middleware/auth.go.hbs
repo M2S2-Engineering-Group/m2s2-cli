@@ -1,0 +1,84 @@
+package middleware
+
+import (
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"crypto/rsa"
+	"encoding/base64"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	jwksOnce  sync.Once
+	jwksCache map[string]*rsa.PublicKey
+)
+
+func loadJWKS() map[string]*rsa.PublicKey {
+	jwksOnce.Do(func() {
+		region := os.Getenv("AWS_REGION")
+		poolID := os.Getenv("COGNITO_USER_POOL_ID")
+		url := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json", region, poolID)
+		resp, err := http.Get(url) //nolint:noctx
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		var body struct {
+			Keys []struct {
+				Kid string `json:"kid"`
+				N   string `json:"n"`
+				E   string `json:"e"`
+			} `json:"keys"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&body) != nil {
+			return
+		}
+		jwksCache = make(map[string]*rsa.PublicKey, len(body.Keys))
+		for _, k := range body.Keys {
+			nBytes, _ := base64.RawURLEncoding.DecodeString(k.N)
+			eBytes, _ := base64.RawURLEncoding.DecodeString(k.E)
+			n := new(big.Int).SetBytes(nBytes)
+			e := int(new(big.Int).SetBytes(eBytes).Int64())
+			jwksCache[k.Kid] = &rsa.PublicKey{N: n, E: e}
+		}
+	})
+	return jwksCache
+}
+
+func RequireAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		header := c.GetHeader("Authorization")
+		if !strings.HasPrefix(header, "Bearer ") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		tokenStr := strings.TrimPrefix(header, "Bearer ")
+
+		keys := loadJWKS()
+		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+			kid, _ := t.Header["kid"].(string)
+			key, ok := keys[kid]
+			if !ok {
+				return nil, fmt.Errorf("unknown kid: %s", kid)
+			}
+			return key, nil
+		})
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+
+		c.Set("claims", token.Claims)
+		c.Next()
+	}
+}

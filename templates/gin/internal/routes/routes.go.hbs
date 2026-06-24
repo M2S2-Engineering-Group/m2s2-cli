@@ -2,10 +2,17 @@ package routes
 
 import (
 	"{{name}}/internal/handlers"
+	"{{name}}/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
 func Register(r *gin.Engine) {
+	r.Use(middleware.CORS())
 	r.GET("/health", handlers.Health)
+
+	v1 := r.Group("/api/v1")
+	{
+		v1.GET("/info", handlers.Info)
+	}
 }

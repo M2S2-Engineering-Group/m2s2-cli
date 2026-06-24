@@ -1,0 +1,36 @@
+import { Injectable, signal } from '@angular/core';
+import { getCurrentUser, signIn, signOut, type AuthUser } from 'aws-amplify/auth';
+import { Amplify } from 'aws-amplify';
+import { environment } from '../../environments/environment';
+
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: environment.cognitoUserPoolId,
+      userPoolClientId: environment.cognitoClientId,
+    },
+  },
+});
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  user = signal<AuthUser | null>(null);
+
+  async fetchUser(): Promise<void> {
+    try {
+      this.user.set(await getCurrentUser());
+    } catch {
+      this.user.set(null);
+    }
+  }
+
+  async login(username: string, password: string): Promise<void> {
+    await signIn({ username, password });
+    await this.fetchUser();
+  }
+
+  async logout(): Promise<void> {
+    await signOut();
+    this.user.set(null);
+  }
+}

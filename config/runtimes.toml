@@ -1,0 +1,16 @@
+[lambda.go]
+runtime = "lambda.Runtime.PROVIDED_AL2023"
+handler = "bootstrap"
+
+[lambda.node]
+runtime = "lambda.Runtime.NODEJS_22_X"
+handler = "dist/index.handler"
+
+[lambda.python]
+runtime = "lambda.Runtime.PYTHON_3_13"
+handler = "main.handler"
+
+[versions]
+go = "1.22"
+node = "22"
+python = "3.13"

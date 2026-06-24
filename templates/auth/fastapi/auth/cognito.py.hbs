@@ -1,0 +1,26 @@
+import os
+import httpx
+from functools import lru_cache
+from jose import jwt, JWTError
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+_bearer = HTTPBearer()
+
+
+@lru_cache
+def _jwks() -> dict:
+    region = os.environ["AWS_REGION"]
+    pool_id = os.environ["COGNITO_USER_POOL_ID"]
+    url = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}/.well-known/jwks.json"
+    return httpx.get(url).json()
+
+
+def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer)) -> dict:
+    token = credentials.credentials
+    try:
+        header = jwt.get_unverified_header(token)
+        key = next(k for k in _jwks()["keys"] if k["kid"] == header["kid"])
+        return jwt.decode(token, key, algorithms=["RS256"])
+    except (JWTError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc

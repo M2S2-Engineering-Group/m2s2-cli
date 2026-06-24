@@ -15,7 +15,11 @@
     "@m2s2/tokens": "^2.2.2",
     "react": "^{{react}}",
     "react-dom": "^{{react_dom}}",
-    "react-router": "^{{react_router}}"
+    "react-router": "^{{react_router}}"{{#if auth}},
+    "aws-amplify": "^{{aws_amplify}}",
+    "@aws-amplify/ui-react": "^{{_aws_amplify_ui_react}}"{{/if}}{{#if billing}},
+    "@stripe/stripe-js": "^{{_stripe_stripe_js}}",
+    "@stripe/react-stripe-js": "^{{_stripe_react_stripe_js}}"{{/if}}
   },
   "devDependencies": {
     "@eslint/js": "^{{_eslint_js}}",

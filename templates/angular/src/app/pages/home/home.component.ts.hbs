@@ -1,0 +1,47 @@
+import { Component } from '@angular/core';
+import {
+  PageHeaderComponent,
+  FeatureCardComponent,
+  CtaSectionComponent,
+} from '@m2s2/ng-lib';
+import { PageHeaderConfig, FeatureCardConfig, CtaConfig } from '@m2s2/ng-lib';
+
+@Component({
+  selector: 'app-home',
+  templateUrl: './home.component.html',
+  styleUrl: './home.component.scss',
+  standalone: true,
+  imports: [PageHeaderComponent, FeatureCardComponent, CtaSectionComponent],
+})
+export class HomeComponent {
+  readonly hero: PageHeaderConfig = {
+    title: 'Welcome to {{name}}',
+    subtitle: 'Built with the M²S² design system — start building something great.',
+  };
+
+  readonly features: FeatureCardConfig[] = [
+    {
+      icon: '🎨',
+      title: 'Design Tokens',
+      body: 'Consistent colours, spacing, and typography powered by @m2s2/tokens.',
+    },
+    {
+      icon: '⚡',
+      title: 'Ready-made Components',
+      body: 'Production-quality UI components wired up and ready to use out of the box.',
+      featured: true,
+    },
+    {
+      icon: '🚀',
+      title: 'Fast by Default',
+      body: 'Angular build tooling with optimised production bundles out of the box.',
+    },
+  ];
+
+  readonly cta: CtaConfig = {
+    title: 'Ready to build?',
+    body: 'Open src/app/pages/home/home.component.ts and start replacing this content.',
+    label: 'View the docs',
+    route: 'https://github.com/M2S2-Engineering-Group',
+  };
+}

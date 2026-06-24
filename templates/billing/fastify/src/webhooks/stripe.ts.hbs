@@ -1,0 +1,29 @@
+import type { FastifyInstance } from 'fastify';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env['STRIPE_SECRET_KEY'] as string);
+const webhookSecret = process.env['STRIPE_WEBHOOK_SECRET'] as string;
+
+export async function stripeWebhookPlugin(app: FastifyInstance) {
+  app.post('/webhooks/stripe', { config: { rawBody: true } }, async (request, reply) => {
+    const sig = request.headers['stripe-signature'] as string;
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(request.rawBody as Buffer, sig, webhookSecret);
+    } catch (err) {
+      return reply.code(400).send(`Webhook error: ${(err as Error).message}`);
+    }
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+        // TODO: provision access for the customer
+        break;
+      case 'customer.subscription.deleted':
+        // TODO: revoke access for the customer
+        break;
+    }
+
+    return { received: true };
+  });
+}

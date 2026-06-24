@@ -1,0 +1,21 @@
+import { ref } from 'vue';
+import { stripePromise } from './stripe';
+
+export function useCheckout() {
+  const loading = ref(false);
+
+  async function checkout(priceId: string) {
+    loading.value = true;
+    const stripe = await stripePromise;
+    const res = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId }),
+    });
+    const { sessionId } = await res.json();
+    await stripe?.redirectToCheckout({ sessionId });
+    loading.value = false;
+  }
+
+  return { loading, checkout };
+}
