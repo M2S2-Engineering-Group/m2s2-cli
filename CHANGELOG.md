@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-25
+
+### Breaking Changes
+- Full backend parity, GitHub Actions, CDK, SETUP.md, Angular+Gin reference kit
+
+### Features
+- Full saas ascaffolding with go(gin) and angular
+
+
 ## [0.1.34] - 2026-06-21
 
 ### Bug Fixes
