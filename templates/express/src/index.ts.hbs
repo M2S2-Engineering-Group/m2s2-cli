@@ -1,9 +1,13 @@
 import express from 'express';
-import { router } from './routes/health.js';
+import { cors } from './middleware/cors.js';
+import { router as healthRouter } from './routes/health.js';
+import { router as infoRouter } from './routes/info.js';
 
 const app = express();
 app.use(express.json());
-app.use(router);
+app.use(cors);
+app.use(healthRouter);
+app.use('/api/v1', infoRouter);
 
 const port = Number(process.env['PORT'] ?? 8080);
 app.listen(port, () => console.log(`Server listening on :${port}`));

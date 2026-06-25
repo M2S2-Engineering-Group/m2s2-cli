@@ -1,11 +1,27 @@
 package routes
 
 import (
+	"os"
+
 	"{{name}}/internal/handlers"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 func Register(app *fiber.App) {
+	origin := os.Getenv("ALLOWED_ORIGIN")
+	if origin == "" {
+		origin = "http://localhost:4200"
+	}
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: origin,
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Content-Type,Authorization",
+	}))
+
 	app.Get("/health", handlers.Health)
+
+	v1 := app.Group("/api/v1")
+	v1.Get("/info", handlers.Info)
 }

@@ -1,8 +1,22 @@
 import Fastify from 'fastify';
 import { healthRoutes } from './routes/health.js';
+import { infoRoutes } from './routes/info.js';
+
+const allowedOrigin = process.env['ALLOWED_ORIGIN'] ?? 'http://localhost:4200';
 
 const app = Fastify({ logger: true });
+
+app.addHook('onRequest', async (request, reply) => {
+  reply.header('Access-Control-Allow-Origin', allowedOrigin);
+  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (request.method === 'OPTIONS') {
+    reply.status(204).send();
+  }
+});
+
 app.register(healthRoutes);
+app.register(infoRoutes, { prefix: '/api/v1' });
 
 const port = Number(process.env['PORT'] ?? 8080);
 app.listen({ port }, (err) => {

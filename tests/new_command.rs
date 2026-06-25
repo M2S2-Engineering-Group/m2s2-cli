@@ -1448,6 +1448,183 @@ fn setup_md_fullstack_includes_apps_paths() {
         .assert(predicate::str::contains("apps/api"));
 }
 
+// ── Backend parity — CORS + /api/v1 ──────────────────────────────────────────
+
+#[test]
+fn echo_has_cors_and_api_v1() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    cmd()
+        .args([
+            "new",
+            "my-api",
+            "--project-type",
+            "backend",
+            "--api-framework",
+            "echo",
+            "--auth",
+            "no",
+            "--billing",
+            "no",
+            "--skip-install",
+            "--offline",
+        ])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    tmp.child("my-api/internal/handlers/info.go")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/internal/routes/routes.go")
+        .assert(predicate::str::contains("CORSWithConfig"))
+        .assert(predicate::str::contains("/api/v1"));
+}
+
+#[test]
+fn fiber_has_cors_and_api_v1() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    cmd()
+        .args([
+            "new",
+            "my-api",
+            "--project-type",
+            "backend",
+            "--api-framework",
+            "fiber",
+            "--auth",
+            "no",
+            "--billing",
+            "no",
+            "--skip-install",
+            "--offline",
+        ])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    tmp.child("my-api/internal/handlers/info.go")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/internal/routes/routes.go")
+        .assert(predicate::str::contains("cors.New"))
+        .assert(predicate::str::contains("/api/v1"));
+}
+
+#[test]
+fn express_has_cors_middleware_and_api_v1() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    cmd()
+        .args([
+            "new",
+            "my-api",
+            "--project-type",
+            "backend",
+            "--api-framework",
+            "express",
+            "--auth",
+            "no",
+            "--billing",
+            "no",
+            "--skip-install",
+            "--offline",
+        ])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    tmp.child("my-api/src/middleware/cors.ts")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/src/routes/info.ts")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/src/index.ts")
+        .assert(predicate::str::contains("/api/v1"));
+}
+
+#[test]
+fn fastify_has_cors_hook_and_api_v1() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    cmd()
+        .args([
+            "new",
+            "my-api",
+            "--project-type",
+            "backend",
+            "--api-framework",
+            "fastify",
+            "--auth",
+            "no",
+            "--billing",
+            "no",
+            "--skip-install",
+            "--offline",
+        ])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    tmp.child("my-api/src/routes/info.ts")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/src/index.ts")
+        .assert(predicate::str::contains("Access-Control-Allow-Origin"))
+        .assert(predicate::str::contains("/api/v1"));
+}
+
+#[test]
+fn fastapi_has_cors_middleware_and_api_v1() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    cmd()
+        .args([
+            "new",
+            "my-api",
+            "--project-type",
+            "backend",
+            "--api-framework",
+            "fastapi",
+            "--auth",
+            "no",
+            "--billing",
+            "no",
+            "--skip-install",
+            "--offline",
+        ])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    tmp.child("my-api/routers/info.py")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/main.py")
+        .assert(predicate::str::contains("CORSMiddleware"))
+        .assert(predicate::str::contains("/api/v1"));
+}
+
+#[test]
+fn flask_has_cors_and_api_v1() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    cmd()
+        .args([
+            "new",
+            "my-api",
+            "--project-type",
+            "backend",
+            "--api-framework",
+            "flask",
+            "--auth",
+            "no",
+            "--billing",
+            "no",
+            "--skip-install",
+            "--offline",
+        ])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    tmp.child("my-api/routes/info.py")
+        .assert(predicate::path::exists());
+    tmp.child("my-api/main.py")
+        .assert(predicate::str::contains("Access-Control-Allow-Origin"))
+        .assert(predicate::str::contains("/api/v1"));
+}
+
 // ── Angular reference kit ─────────────────────────────────────────────────────
 
 #[test]
