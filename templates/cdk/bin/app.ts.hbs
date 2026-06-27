@@ -1,11 +1,31 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { AppStack } from '../lib/app-stack';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { AppStack } from '@m2s2/cdk-constructs';
 
 const app = new cdk.App();
 
 new AppStack(app, '{{pascal_name}}', {
+  appName: '{{name}}',
+  {{#if has_frontend}}
+  frontend: {
+    distPath: '{{#if is_fullstack}}../apps/web/dist{{else}}../dist{{/if}}',
+  },
+  {{/if}}
+  {{#if has_backend}}
+  backend: {
+    runtime: {{lambda_runtime}},
+    handler: '{{lambda_handler}}',
+    codePath: '{{#if is_fullstack}}../apps/api{{else}}..{{/if}}',
+  },
+  {{/if}}
+  {{#if auth}}
+  auth: true,
+  {{/if}}
+  {{#if billing}}
+  billing: true,
+  {{/if}}
   env: {
     account: process.env['CDK_DEFAULT_ACCOUNT'],
     region: process.env['CDK_DEFAULT_REGION'],

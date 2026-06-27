@@ -702,10 +702,8 @@ fn cdk_generated_for_frontend() {
         .assert(predicate::path::exists());
     tmp.child("my-app/cdk/bin/app.ts")
         .assert(predicate::path::exists());
-    tmp.child("my-app/cdk/lib/app-stack.ts")
-        .assert(predicate::path::exists());
-    tmp.child("my-app/cdk/lib/constructs/frontend-construct.ts")
-        .assert(predicate::path::exists());
+    tmp.child("my-app/cdk/package.json")
+        .assert(predicate::str::contains("@m2s2/cdk-constructs"));
 }
 
 #[test]
@@ -732,8 +730,10 @@ fn cdk_generated_for_backend() {
 
     tmp.child("my-api/cdk/cdk.json")
         .assert(predicate::path::exists());
-    tmp.child("my-api/cdk/lib/constructs/backend-construct.ts")
+    tmp.child("my-api/cdk/bin/app.ts")
         .assert(predicate::path::exists());
+    tmp.child("my-api/cdk/package.json")
+        .assert(predicate::str::contains("@m2s2/cdk-constructs"));
 }
 
 #[test]
@@ -762,10 +762,10 @@ fn cdk_generated_for_fullstack() {
 
     tmp.child("my-app/cdk/cdk.json")
         .assert(predicate::path::exists());
-    tmp.child("my-app/cdk/lib/constructs/frontend-construct.ts")
-        .assert(predicate::path::exists());
-    tmp.child("my-app/cdk/lib/constructs/backend-construct.ts")
-        .assert(predicate::path::exists());
+    tmp.child("my-app/cdk/bin/app.ts")
+        .assert(predicate::str::contains("@m2s2/cdk-constructs"))
+        .assert(predicate::str::contains("apps/web/dist"))
+        .assert(predicate::str::contains("apps/api"));
 }
 
 #[test]
@@ -790,8 +790,8 @@ fn cdk_auth_construct_generated_when_auth_yes() {
         .assert()
         .success();
 
-    tmp.child("my-app/cdk/lib/constructs/auth-construct.ts")
-        .assert(predicate::path::exists());
+    tmp.child("my-app/cdk/bin/app.ts")
+        .assert(predicate::str::contains("auth: true"));
 }
 
 #[test]
@@ -816,8 +816,8 @@ fn cdk_auth_construct_omitted_when_auth_no() {
         .assert()
         .success();
 
-    tmp.child("my-app/cdk/lib/constructs/auth-construct.ts")
-        .assert(predicate::path::missing());
+    tmp.child("my-app/cdk/bin/app.ts")
+        .assert(predicate::str::contains("auth: true").not());
 }
 
 #[test]
@@ -842,8 +842,8 @@ fn cdk_billing_construct_generated_when_billing_yes() {
         .assert()
         .success();
 
-    tmp.child("my-app/cdk/lib/constructs/billing-construct.ts")
-        .assert(predicate::path::exists());
+    tmp.child("my-app/cdk/bin/app.ts")
+        .assert(predicate::str::contains("billing: true"));
 }
 
 #[test]
