@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.15] - 2026-07-30
+
+### Bug Fixes
+- Generate page emits a barrel pointing at the wrong file (React/Vue)
+- Run.rs backend dispatch bugs (Go build, Python venv, ruff args)
+- Fastapi/flask main.py.hbs lint failures
+- Reconcile mutually-incompatible npm peer dependencies
+- Fullstack scaffolds merged frontend/backend npm versions into one map
+- Angular template bugs (navbar config, jest setup)
+- Express/Fastify tsconfig rootDir + wrong AddressInfo import
+
+
 ## [0.2.14] - 2026-07-21
 
 ### Bug Fixes
