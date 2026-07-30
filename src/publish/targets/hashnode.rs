@@ -1,9 +1,8 @@
 use crate::publish::article::{Article, slugify};
 use crate::publish::config::HashnodeConfig;
-use crate::publish::target::{HttpTarget, PublishOutcome, PublishTarget};
+use crate::publish::target::{HttpTarget, PublishOutcome};
 use anyhow::{Result, bail};
 use serde::Serialize;
-use async_trait::async_trait;
 
 const PUBLISH_POST_MUTATION: &str = r#"
 mutation PublishPost($input: PublishPostInput!) {
@@ -50,13 +49,8 @@ struct PublishPostInput<'a> {
     slug: &'a str,
 }
 
-#[async_trait]
-impl PublishTarget for Hashnode {
-    fn name(&self) -> &'static str {
-        "hashnode"
-    }
-
-    async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+impl Hashnode {
+    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
         if update {
             bail!("the hashnode target doesn't support --update yet");
         }

@@ -1,3 +1,4 @@
+use crate::publish::target_kind::TargetKind;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::path::Path;
@@ -13,7 +14,7 @@ pub struct Article {
     pub tags: Vec<String>,
     pub cover_image: Option<String>,
     pub canonical_url: Option<String>,
-    pub targets: Vec<String>,
+    pub targets: Vec<TargetKind>,
     pub content: String,
 }
 
@@ -29,13 +30,13 @@ struct Frontmatter {
     cover_image: Option<String>,
     canonical_url: Option<String>,
     #[serde(default)]
-    publish: Vec<String>,
+    publish: Vec<TargetKind>,
 }
 
 /// Parse a Markdown file with a leading `---`-delimited YAML frontmatter block.
 ///
 /// `cli_targets`, if given (from `--to`), overrides the frontmatter's `publish:` list.
-pub fn parse_article(path: &Path, cli_targets: Option<&[String]>) -> Result<Article> {
+pub fn parse_article(path: &Path, cli_targets: Option<&[TargetKind]>) -> Result<Article> {
     let raw =
         std::fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
 
@@ -141,7 +142,7 @@ mod tests {
         assert_eq!(article.slug, "my-post");
         assert_eq!(article.date, "2026-07-30");
         assert_eq!(article.tags, vec!["rust", "cli"]);
-        assert_eq!(article.targets, vec!["devto", "m2s2"]);
+        assert_eq!(article.targets, vec![TargetKind::Devto, TargetKind::M2s2]);
         assert_eq!(article.content, "# Hello\n\nBody text.");
     }
 
@@ -159,8 +160,8 @@ mod tests {
         let (_dir, path) = write_temp(
             "---\ntitle: \"T\"\ndate: 2026-07-30\nsummary: \"s\"\npublish: [devto]\n---\nbody\n",
         );
-        let article = parse_article(&path, Some(&["hashnode".to_string()])).unwrap();
-        assert_eq!(article.targets, vec!["hashnode"]);
+        let article = parse_article(&path, Some(&[TargetKind::Hashnode])).unwrap();
+        assert_eq!(article.targets, vec![TargetKind::Hashnode]);
     }
 
     #[test]

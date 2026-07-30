@@ -1,8 +1,7 @@
 use crate::publish::article::Article;
 use crate::publish::config::DevToConfig;
-use crate::publish::target::{HttpTarget, PublishOutcome, PublishTarget};
+use crate::publish::target::{HttpTarget, PublishOutcome};
 use anyhow::{Result, bail};
-use async_trait::async_trait;
 use serde::Serialize;
 
 pub struct DevTo {
@@ -42,13 +41,8 @@ struct ArticleFields<'a> {
     canonical_url: Option<&'a str>,
 }
 
-#[async_trait]
-impl PublishTarget for DevTo {
-    fn name(&self) -> &'static str {
-        "devto"
-    }
-
-    async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+impl DevTo {
+    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
         if update {
             bail!("the devto target doesn't support --update yet");
         }

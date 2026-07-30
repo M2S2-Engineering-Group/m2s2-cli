@@ -1,6 +1,9 @@
 use crate::publish::article::Article;
+use crate::publish::target_kind::TargetKind;
+use crate::publish::targets::devto::DevTo;
+use crate::publish::targets::hashnode::Hashnode;
+use crate::publish::targets::m2s2::M2s2;
 use anyhow::Result;
-use async_trait::async_trait;
 
 #[derive(Debug)]
 pub struct PublishOutcome {
@@ -22,13 +25,33 @@ impl HttpTarget {
     }
 }
 
-/// One place to publish an [`Article`] to. Implement this for a new connector and register it
-/// in `publish::targets::build_one` — that's the only other place that needs to know about it.
-#[async_trait]
-pub trait PublishTarget {
-    fn name(&self) -> &'static str;
+/// A constructed, ready-to-use publish target — one variant per [`TargetKind`], built in
+/// `publish::targets::build_one`. A plain enum rather than `Box<dyn Trait>`: the set of targets
+/// is closed and known at compile time (adding one means writing code here regardless), so
+/// there's no need to pay for a heap allocation and vtable indirection per target just to get a
+/// `Vec` of them — a match arm does the same job for free.
+pub enum Target {
+    Devto(DevTo),
+    Hashnode(Hashnode),
+    M2s2(M2s2),
+}
+
+impl Target {
+    pub fn kind(&self) -> TargetKind {
+        match self {
+            Self::Devto(_) => TargetKind::Devto,
+            Self::Hashnode(_) => TargetKind::Hashnode,
+            Self::M2s2(_) => TargetKind::M2s2,
+        }
+    }
 
     /// `update`: create (`false`) vs. update an existing post (`true`), where the target
-    /// supports the distinction. Targets that don't support updates should return an error.
-    async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome>;
+    /// supports the distinction. Targets that don't support updates return an error.
+    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+        match self {
+            Self::Devto(t) => t.publish(article, update).await,
+            Self::Hashnode(t) => t.publish(article, update).await,
+            Self::M2s2(t) => t.publish(article, update).await,
+        }
+    }
 }

@@ -1,4 +1,5 @@
 use crate::publish;
+use crate::publish::TargetKind;
 use anyhow::{Result, bail};
 use clap::Args;
 use console::style;
@@ -43,7 +44,7 @@ pub struct PublishArgs {
 
     /// Comma-separated target list, overriding the frontmatter's `publish:` list
     #[arg(long, value_delimiter = ',')]
-    pub to: Option<Vec<String>>,
+    pub to: Option<Vec<TargetKind>>,
 
     /// Update an existing post instead of creating a new one (target-dependent support)
     #[arg(long)]
@@ -57,7 +58,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
 
     let mut had_error = false;
     for target in targets {
-        print!("{} publishing to {}... ", style("→").dim(), target.name());
+        print!("{} publishing to {}... ", style("→").dim(), target.kind());
         std::io::stdout().flush().ok();
         match target.publish(&article, args.update).await {
             Ok(outcome) => println!("{} {}", style("✓").green().bold(), outcome.message),

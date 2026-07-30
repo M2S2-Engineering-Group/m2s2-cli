@@ -1,8 +1,7 @@
 use crate::publish::article::Article;
 use crate::publish::config::M2s2Config;
-use crate::publish::target::{HttpTarget, PublishOutcome, PublishTarget};
+use crate::publish::target::{HttpTarget, PublishOutcome};
 use anyhow::{Result, bail};
-use async_trait::async_trait;
 use serde::Serialize;
 
 pub struct M2s2 {
@@ -33,13 +32,8 @@ struct BlogPostRequest<'a> {
     content: &'a str,
 }
 
-#[async_trait]
-impl PublishTarget for M2s2 {
-    fn name(&self) -> &'static str {
-        "m2s2"
-    }
-
-    async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+impl M2s2 {
+    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
         let body = BlogPostRequest {
             slug: &article.slug,
             title: &article.title,
