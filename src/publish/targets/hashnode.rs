@@ -1,6 +1,6 @@
 use crate::publish::article::{Article, slugify};
 use crate::publish::config::HashnodeConfig;
-use crate::publish::target::{PublishOutcome, PublishTarget};
+use crate::publish::target::{HttpTarget, PublishOutcome, PublishTarget};
 use anyhow::{Result, bail};
 use serde::Serialize;
 use async_trait::async_trait;
@@ -16,21 +16,19 @@ mutation PublishPost($input: PublishPostInput!) {
 pub struct Hashnode {
     token: String,
     publication_id: String,
-    client: reqwest::Client,
-    endpoint: String,
+    http: HttpTarget,
 }
 
 impl Hashnode {
-    pub fn new(cfg: &HashnodeConfig) -> Self {
-        Self::with_endpoint(cfg, "https://gql.hashnode.com".to_string())
+    pub fn new(client: reqwest::Client, cfg: &HashnodeConfig) -> Self {
+        Self::with_endpoint(client, cfg, "https://gql.hashnode.com")
     }
 
-    fn with_endpoint(cfg: &HashnodeConfig, endpoint: String) -> Self {
+    fn with_endpoint(client: reqwest::Client, cfg: &HashnodeConfig, endpoint: impl Into<String>) -> Self {
         Self {
             token: cfg.token.clone(),
             publication_id: cfg.publication_id.clone(),
-            client: reqwest::Client::new(),
-            endpoint,
+            http: HttpTarget::new(client, endpoint),
         }
     }
 }
@@ -76,8 +74,9 @@ impl PublishTarget for Hashnode {
         };
 
         let resp = self
+            .http
             .client
-            .post(&self.endpoint)
+            .post(&self.http.base_url)
             .header("Authorization", format!("Bearer {}", self.token))
             .json(&serde_json::json!({
                 "query": PUBLISH_POST_MUTATION,
@@ -145,6 +144,7 @@ mod tests {
         });
 
         let target = Hashnode::with_endpoint(
+            reqwest::Client::new(),
             &HashnodeConfig { token: "secret-pat".into(), publication_id: "pub1".into() },
             server.base_url(),
         );
@@ -168,6 +168,7 @@ mod tests {
         });
 
         let target = Hashnode::with_endpoint(
+            reqwest::Client::new(),
             &HashnodeConfig { token: "t".into(), publication_id: "p".into() },
             server.base_url(),
         );

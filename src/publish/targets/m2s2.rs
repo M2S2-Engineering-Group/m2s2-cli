@@ -1,22 +1,20 @@
 use crate::publish::article::Article;
 use crate::publish::config::M2s2Config;
-use crate::publish::target::{PublishOutcome, PublishTarget};
+use crate::publish::target::{HttpTarget, PublishOutcome, PublishTarget};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use serde::Serialize;
 
 pub struct M2s2 {
-    endpoint: String,
     token: String,
-    client: reqwest::Client,
+    http: HttpTarget,
 }
 
 impl M2s2 {
-    pub fn new(cfg: &M2s2Config) -> Self {
+    pub fn new(client: reqwest::Client, cfg: &M2s2Config) -> Self {
         Self {
-            endpoint: cfg.endpoint.trim_end_matches('/').to_string(),
             token: cfg.token.clone(),
-            client: reqwest::Client::new(),
+            http: HttpTarget::new(client, cfg.endpoint.trim_end_matches('/')),
         }
     }
 }
@@ -53,11 +51,11 @@ impl PublishTarget for M2s2 {
             content: &article.content,
         };
 
-        let url = format!("{}/admin/blog", self.endpoint);
+        let url = format!("{}/admin/blog", self.http.base_url);
         let req = if update {
-            self.client.put(&url).query(&[("slug", &article.slug)])
+            self.http.client.put(&url).query(&[("slug", &article.slug)])
         } else {
-            self.client.post(&url)
+            self.http.client.post(&url)
         };
 
         let resp = req.bearer_auth(&self.token).json(&body).send().await?;
@@ -118,7 +116,10 @@ mod tests {
             then.status(201).body(r#"{"message":"post created"}"#);
         });
 
-        let target = M2s2::new(&M2s2Config { endpoint: server.base_url(), token: "tok".into() });
+        let target = M2s2::new(
+            reqwest::Client::new(),
+            &M2s2Config { endpoint: server.base_url(), token: "tok".into() },
+        );
         let outcome = target.publish(&article, false).await.unwrap();
         mock.assert();
         assert_eq!(outcome.message, "created");
@@ -135,7 +136,10 @@ mod tests {
             then.status(200).body(r#"{"message":"post updated"}"#);
         });
 
-        let target = M2s2::new(&M2s2Config { endpoint: server.base_url(), token: "tok".into() });
+        let target = M2s2::new(
+            reqwest::Client::new(),
+            &M2s2Config { endpoint: server.base_url(), token: "tok".into() },
+        );
         let outcome = target.publish(&article, true).await.unwrap();
         mock.assert();
         assert_eq!(outcome.message, "updated");
@@ -152,7 +156,10 @@ mod tests {
             then.status(409);
         });
 
-        let target = M2s2::new(&M2s2Config { endpoint: server.base_url(), token: "tok".into() });
+        let target = M2s2::new(
+            reqwest::Client::new(),
+            &M2s2Config { endpoint: server.base_url(), token: "tok".into() },
+        );
         let err = target.publish(&article, false).await.unwrap_err();
         assert!(err.to_string().contains("--update"));
     }

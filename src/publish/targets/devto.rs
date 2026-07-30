@@ -1,26 +1,24 @@
 use crate::publish::article::Article;
 use crate::publish::config::DevToConfig;
-use crate::publish::target::{PublishOutcome, PublishTarget};
+use crate::publish::target::{HttpTarget, PublishOutcome, PublishTarget};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use serde::Serialize;
 
 pub struct DevTo {
     api_key: String,
-    client: reqwest::Client,
-    base_url: String,
+    http: HttpTarget,
 }
 
 impl DevTo {
-    pub fn new(cfg: &DevToConfig) -> Self {
-        Self::with_base_url(cfg, "https://dev.to".to_string())
+    pub fn new(client: reqwest::Client, cfg: &DevToConfig) -> Self {
+        Self::with_base_url(client, cfg, "https://dev.to")
     }
 
-    fn with_base_url(cfg: &DevToConfig, base_url: String) -> Self {
+    fn with_base_url(client: reqwest::Client, cfg: &DevToConfig, base_url: impl Into<String>) -> Self {
         Self {
             api_key: cfg.api_key.clone(),
-            client: reqwest::Client::new(),
-            base_url,
+            http: HttpTarget::new(client, base_url),
         }
     }
 }
@@ -68,8 +66,9 @@ impl PublishTarget for DevTo {
         };
 
         let resp = self
+            .http
             .client
-            .post(format!("{}/api/articles", self.base_url))
+            .post(format!("{}/api/articles", self.http.base_url))
             .header("api-key", &self.api_key)
             .json(&body)
             .send()
@@ -130,6 +129,7 @@ mod tests {
         });
 
         let target = DevTo::with_base_url(
+            reqwest::Client::new(),
             &DevToConfig { api_key: "secret".into() },
             server.base_url(),
         );
@@ -151,6 +151,7 @@ mod tests {
         });
 
         let target = DevTo::with_base_url(
+            reqwest::Client::new(),
             &DevToConfig { api_key: "secret".into() },
             server.base_url(),
         );
@@ -163,7 +164,8 @@ mod tests {
     async fn update_is_not_supported() {
         let dir = TempDir::new().unwrap();
         let article = sample_article(&dir);
-        let target = DevTo::with_base_url(&DevToConfig { api_key: "x".into() }, "http://unused".into());
+        let target =
+            DevTo::with_base_url(reqwest::Client::new(), &DevToConfig { api_key: "x".into() }, "http://unused");
         let err = target.publish(&article, true).await.unwrap_err();
         assert!(err.to_string().contains("doesn't support --update"));
     }
