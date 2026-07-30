@@ -49,12 +49,12 @@ pub async fn run(args: PageArgs) -> Result<()> {
                 "generate/react/page.scss.hbs",
                 &format!("{pascal}Page.scss"),
             ),
-            ("generate/react/index.ts.hbs", "index.ts"),
+            ("generate/react/page-index.ts.hbs", "index.ts"),
         ],
         "vue" => &[
             ("generate/vue/page.vue.hbs", &format!("{pascal}Page.vue")),
             ("generate/vue/page.scss.hbs", &format!("{pascal}Page.scss")),
-            ("generate/vue/index.ts.hbs", "index.ts"),
+            ("generate/vue/page-index.ts.hbs", "index.ts"),
         ],
         _ => &[
             (
