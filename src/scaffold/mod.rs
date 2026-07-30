@@ -336,6 +336,7 @@ pub fn offline_versions() -> serde_json::Map<String, serde_json::Value> {
         "express",
         "fastify",
         "jest",
+        "jest_environment_jsdom",
         "jest_preset_angular",
         "jsdom",
         "react",

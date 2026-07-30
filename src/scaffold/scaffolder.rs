@@ -137,6 +137,7 @@ impl Scaffolder {
                         "tslib",
                         "jest",
                         "jest-preset-angular",
+                        "jest-environment-jsdom",
                         "@types/jest",
                         "eslint",
                         "@eslint/js",
