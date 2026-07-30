@@ -24,6 +24,12 @@
 //! server's port as never coming up even when it genuinely did. Set
 //! `M2S2_E2E_SKIP_DEV_ASSERT=1` to downgrade that specific check to a warning instead of a
 //! hard failure; leave it unset for a real assertion.
+//!
+//! Some sandboxes go further and kill the whole test process outright the moment a child is
+//! spawned into its own process group (needed so the dev server's full process tree, e.g. a
+//! `go run`/`npm` child, can be reaped afterward) — not just block the loopback probe. In that
+//! case `M2S2_E2E_SKIP_DEV_ASSERT` isn't enough since there's nothing left to downgrade. Set
+//! `M2S2_E2E_SKIP_DEV_SPAWN=1` to skip the dev-smoke-test step entirely.
 
 use assert_cmd::Command;
 use assert_fs::prelude::*;
@@ -138,7 +144,21 @@ fn drain_output(child: &mut Child) {
 
 /// Start `m2s2 dev` in `dir`, wait for every port in `ports` to come up, then kill it. Asserts
 /// that all ports came up within `timeout`.
+///
+/// Set `M2S2_E2E_SKIP_DEV_SPAWN=1` to skip this step entirely rather than merely downgrading
+/// its assertion (see `M2S2_E2E_SKIP_DEV_ASSERT` above). Some sandboxes kill the *entire* test
+/// process the moment a child is put in its own process group (`spawn_dev` does this on Unix so
+/// `kill_dev` can reap the whole tree) — not just refuse the loopback connection — so there's no
+/// way to downgrade-and-continue there; the only option is not to spawn at all.
 fn smoke_test_dev(dir: &Path, ports: &[u16], timeout: Duration) {
+    if std::env::var("M2S2_E2E_SKIP_DEV_SPAWN").is_ok() {
+        eprintln!(
+            "warning: skipping dev-smoke-test for {} (M2S2_E2E_SKIP_DEV_SPAWN set)",
+            dir.display()
+        );
+        return;
+    }
+
     let mut child = spawn_dev(dir);
     drain_output(&mut child);
 

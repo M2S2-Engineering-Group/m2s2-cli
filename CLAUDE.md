@@ -68,23 +68,73 @@ the box, no manual fixes required. Full history is in the conversation; this is 
       Angular's devDependencies (required explicitly since Jest 28) — added to
       `package.json.hbs`, the supplemental-package list in `src/scaffold/scaffolder.rs`, and the
       offline-mode placeholder key list in `src/scaffold/mod.rs`.
+  12. **Confirmed via live re-run**: fix #11 was correct but insufficient — `setup-jest.ts` also
+      imported `jest-preset-angular/setup-jest`, which was removed in jest-preset-angular v17
+      (this CLI resolves "latest", and v17 is current). Replaced with the new API:
+      `import { setupZoneTestEnv } from 'jest-preset-angular/setup-env/zone'; setupZoneTestEnv();`
+      (`templates/angular/setup-jest.ts`). Confirmed fixed in isolation.
+
+### Known environment gotcha (this sandboxed dev machine only)
+
+The sandboxed agent shell can spawn `m2s2 dev` during the e2e fullstack-lifecycle check but,
+per the note above, can't reliably kill the process group afterward (`kill -TERM -<pgid>` →
+"Operation not permitted"). If a background e2e run gets interrupted mid-suite, the orphaned
+`m2s2 dev` process keeps a port bound in a `/tmp/.tmpXXXXXX/...` scaffold dir, and the *next*
+e2e run then fails near-instantly (observed: died after starting the very first scenario,
+zero useful output). Symptom → fix: `ps aux | grep target/debug/m2s2`, confirm the process's
+cwd is a `/tmp/.tmp*` scaffold dir (not something the user is working on), `kill -9` it, retry.
+Also note: `cargo test --test e2e -- --ignored ... > logfile 2>&1` run via the harness's
+background-bash mechanism was observed to be killed externally (exit code 144) independent of
+this issue at least once this session — cause not fully root-caused; if a background e2e run
+dies with no clear panic/assertion in the log, suspect the harness rather than the test logic.
 
 ### What's NOT done / next steps
 
-1. **Re-run the full e2e matrix** to confirm fixes #11 (Angular jest config) actually land —
-   they were applied but not yet re-verified via a live run before this handoff. Last confirmed
-   state: 15/31 passing, with all 8 remaining Angular failures at the `m2s2 test` step (jest
-   config), and #11 should fix that. Command is above.
-2. **`@m2s2/vue-lib` ships without usable type declarations** — confirmed via direct tarball
-   inspection: the published package's `package.json` `types`/`exports.types` field points at
-   `dist/index.d.ts`, but the actual `.d.ts` files in the tarball live at
-   `dist/vue-lib/src/index.d.ts` instead. This breaks `vue-tsc` on every single Vue scaffold
-   (frontend and fullstack — 8 of the 31 e2e scenarios). **This is a bug in the
-   `@m2s2/vue-lib` package itself (the `m2s2-design-system` repo, not this one)** — there's a
-   local checkout at `/Users/mgmaster24/projects/m2s2-design-system`. Not fixable from
-   `m2s2-cli`'s templates except via an ugly local `.d.ts` shim workaround; the user hasn't yet
-   said whether they want that or want it fixed upstream instead.
+1. **Re-run the full e2e matrix once `m2s2-design-system` upstream fixes (item 2 below) are
+   published.** Angular and Vue scenarios (16 of 31) are both currently blocked on upstream
+   `@m2s2/*` package bugs, not on anything fixable in this repo — see item 2. The other 15
+   scenarios (React frontend, all 7 backends, React fullstack ×7) were being re-verified when
+   this handoff was written; check their result before assuming they're clean.
+2. **Three confirmed upstream packaging bugs in `m2s2-design-system`, all blocking `m2s2 test`
+   for the affected framework's scaffolds.** User's decision (2026-07-30): **user will fix these
+   upstream themselves** rather than have `m2s2-cli` work around them in templates. Re-run the
+   full e2e matrix once new versions are published, since the fix is external to this repo.
+   - `@m2s2/vue-lib`: `package.json` `types`/`exports.types` points at `dist/index.d.ts`, but the
+     actual `.d.ts` files in the published tarball live at `dist/vue-lib/src/index.d.ts` instead.
+     Breaks `vue-tsc` on every Vue scaffold (8/31 e2e scenarios). Local checkout referenced
+     previously at `/Users/mgmaster24/projects/m2s2-design-system` (path may differ on this
+     machine — confirm before assuming it's there).
+   - `@m2s2/utils` and `@m2s2/models`: both published ESM-only — `package.json` `exports` map has
+     only an `"import"` condition, no `"require"`/`"main"` fallback, and their JS entry files
+     aren't named `.mjs` either. `@m2s2/ng-lib`'s own bundle (`fesm2022/*.mjs`) imports both, and
+     jest-preset-angular's default CJS preset can't resolve either through Jest's CJS resolver —
+     confirmed via direct reproduction (`Cannot find module '@m2s2/utils'` then, after working
+     around that one, `Cannot find module '@m2s2/models'`, both from inside
+     `node_modules/@m2s2/ng-lib/fesm2022/m2s2-ng-lib.mjs`). This breaks **100% of Angular
+     scaffolds' `m2s2 test`** (8/31 e2e scenarios) — not an edge case. A local jest.config
+     `moduleNameMapper`/`transformIgnorePatterns` workaround was verified to work package-by-
+     package but was explicitly rejected in favor of the upstream fix.
 3. Coverage still not exercised in the e2e suite: `--auth yes` / `--billing yes` (only checked
    for file-existence in the fast/offline unit tests, never actually installed+built+linted), and
    CDK output isn't `cdk synth`-validated.
 4. Nothing has been pushed to a remote. Commits made this session are local only.
+
+## Session handoff — new `publish` command (in progress)
+
+New feature, unrelated to the scaffolding domain everything else in this CLI covers: publish
+blog articles to external platforms. Requirements gathered from the user so far (2026-07-30):
+
+- **Targets**: Dev.to, Hashnode, and the user's own blog via an **m2s2-platform Go API** —
+  *not* raw S3 — the config supplies an **endpoint URL** the CLI POSTs to; the user already has
+  a Go API for this on the m2s2 platform. Medium explicitly **skipped for now** (its public API
+  stopped issuing new integration tokens years ago; revisit only if the user produces an
+  existing token).
+- **Auth**: config file (not env vars) — user confirmed. Proposed location `.m2s2/publish.toml`,
+  not yet confirmed.
+- **Article source format**: proposed but not yet confirmed — Markdown files with YAML
+  frontmatter (`title`, `tags`, `canonical_url`, `cover_image`, `publish: [devto, hashnode,
+  m2s2]` target list). Not yet validated against what the user actually wants.
+- **Still needed before implementing**: the m2s2-platform Go API's request/response contract
+  (HTTP method, path, body schema, auth header format) — nothing about this API is in the
+  `m2s2-cli` repo itself, must come from the user or the platform repo.
+- No code written yet for this feature.
