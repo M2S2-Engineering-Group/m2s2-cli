@@ -124,43 +124,54 @@ impl ScaffoldPlan {
             }
 
             ScaffoldPlan::Fullstack(fe, be) => {
-                let versions = if offline {
-                    offline_versions()
+                let (fe_versions, be_versions) = if offline {
+                    (offline_versions(), offline_versions())
                 } else {
-                    let mut v = fe.resolve_versions().await?;
-                    v.extend(be.resolve_versions().await?);
-                    v
+                    (fe.resolve_versions().await?, be.resolve_versions().await?)
                 };
-                let data = build_data(name, versions, Some(fe), Some(be));
+
+                // apps/web and apps/api each get their own version map. Merging them into one
+                // shared map (as used to happen here) silently drops one side's resolved
+                // version whenever both ecosystems declare the same package — e.g. a Node
+                // backend's independently-`latest`-resolved `typescript` would clobber the
+                // frontend's carefully-anchored (m2s2-lib-compatible) `typescript` version in
+                // the map used to render apps/web's package.json, breaking `npm install` there.
+                let mut merged_versions = fe_versions.clone();
+                merged_versions.extend(be_versions.clone());
+
+                let web_data = build_data(name, fe_versions, Some(fe), Some(be));
+                let api_data = build_data(name, be_versions, Some(fe), Some(be));
+                let data = build_data(name, merged_versions, Some(fe), Some(be));
+
                 spinner.set_message("Writing project files…");
-                scaffold_into(&root.join("apps/web"), fe.template_prefix, &data)?;
+                scaffold_into(&root.join("apps/web"), fe.template_prefix, &web_data)?;
                 if fe.auth {
                     scaffold_into(
                         &root.join("apps/web"),
                         &format!("auth/{}", fe.template_prefix),
-                        &data,
+                        &web_data,
                     )?;
                 }
                 if fe.billing {
                     scaffold_into(
                         &root.join("apps/web"),
                         &format!("billing/{}", fe.template_prefix),
-                        &data,
+                        &web_data,
                     )?;
                 }
-                scaffold_into(&root.join("apps/api"), be.template_prefix, &data)?;
+                scaffold_into(&root.join("apps/api"), be.template_prefix, &api_data)?;
                 if be.auth {
                     scaffold_into(
                         &root.join("apps/api"),
                         &format!("auth/{}", be.template_prefix),
-                        &data,
+                        &api_data,
                     )?;
                 }
                 if be.billing {
                     scaffold_into(
                         &root.join("apps/api"),
                         &format!("billing/{}", be.template_prefix),
-                        &data,
+                        &api_data,
                     )?;
                 }
                 scaffold_into(root, "fullstack", &data)?;
