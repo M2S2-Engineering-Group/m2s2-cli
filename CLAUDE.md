@@ -119,22 +119,52 @@ dies with no clear panic/assertion in the log, suspect the harness rather than t
    CDK output isn't `cdk synth`-validated.
 4. Nothing has been pushed to a remote. Commits made this session are local only.
 
-## Session handoff — new `publish` command (in progress)
+## `publish` command (shipped 2026-07-30)
 
-New feature, unrelated to the scaffolding domain everything else in this CLI covers: publish
-blog articles to external platforms. Requirements gathered from the user so far (2026-07-30):
+New feature, unrelated to the scaffolding domain everything else in this CLI covers: `m2s2
+publish <file.md>` publishes a Markdown article (YAML frontmatter) to Dev.to, Hashnode, and/or
+the user's own m2s2-platform blog. Built as a `PublishTarget` trait (`src/publish/target.rs`) so
+adding a new connector is "implement the trait + one match arm in
+`src/publish/targets/mod.rs::build_one`" — explicitly requested by the user for extensibility,
+not a speculative abstraction.
 
-- **Targets**: Dev.to, Hashnode, and the user's own blog via an **m2s2-platform Go API** —
-  *not* raw S3 — the config supplies an **endpoint URL** the CLI POSTs to; the user already has
-  a Go API for this on the m2s2 platform. Medium explicitly **skipped for now** (its public API
-  stopped issuing new integration tokens years ago; revisit only if the user produces an
-  existing token).
-- **Auth**: config file (not env vars) — user confirmed. Proposed location `.m2s2/publish.toml`,
-  not yet confirmed.
-- **Article source format**: proposed but not yet confirmed — Markdown files with YAML
-  frontmatter (`title`, `tags`, `canonical_url`, `cover_image`, `publish: [devto, hashnode,
-  m2s2]` target list). Not yet validated against what the user actually wants.
-- **Still needed before implementing**: the m2s2-platform Go API's request/response contract
-  (HTTP method, path, body schema, auth header format) — nothing about this API is in the
-  `m2s2-cli` repo itself, must come from the user or the platform repo.
-- No code written yet for this feature.
+- **Layout**: `src/publish/{article,config,target}.rs` + `src/publish/targets/{devto,hashnode,
+  m2s2}.rs`. Command glue in `src/commands/publish.rs`.
+- **Article format**: Markdown + YAML frontmatter (`title`, `date`, `summary`, `tags`, `slug`
+  optional/derived from filename, `excerpt`/`cover_image`/`canonical_url` optional, `publish:
+  [...]` target list, overridable by `--to`). Deliberately matches what `m2s2-platform`'s own
+  admin blog editor already exports as Markdown (confirmed by reading
+  `apps/web/src/app/admin/blog-edit/admin-blog-edit.component.ts` in that repo) — not a new,
+  competing format.
+- **Config**: `.m2s2-publish.toml` in the CWD (flat dotfile, matching `.m2s2.json`'s existing
+  convention rather than a `.m2s2/` subdirectory), `[devto]`/`[hashnode]`/`[m2s2]` sections.
+  Contains secrets — not gitignored by this repo since it lives in whatever directory the *user*
+  runs `m2s2 publish` from (their own blog-content repo), not in a scaffolded project.
+- **m2s2 target contract** verified by reading `m2s2-platform`'s actual source
+  (`apps/api/dashboard/handlers/blog.go`), not guessed: `POST /admin/blog` (create, 409 if slug
+  exists) / `PUT /admin/blog?slug=` (update), Cognito JWT bearer auth requiring the `admin`
+  Cognito group claim. **Auth is a static bearer token pasted into config, manually refreshed**
+  — deliberate v1 scope cut: the platform's real login (`apps/web/src/environments/
+  environment.prod.ts`) is Amplify/Cognito with SRP + optional TOTP MFA, which is substantial
+  scope beyond what the CLI needed today. A `m2s2 login` companion command doing the full
+  Cognito dance would be the natural fast-follow if manual token refresh gets annoying.
+- **Dev.to**: verified against current Forem API docs — `POST https://dev.to/api/articles`,
+  `api-key` header, `{"article": {...}}` body, comma-joined tags (max 4).
+- **Hashnode**: verified against current docs/search (their API changed **May 2026** — legacy
+  `api.hashnode.com` is discontinued, new endpoint is `https://gql.hashnode.com`, and **publish
+  access now requires a paid Hashnode Pro subscription** — user confirmed they have it).
+  `publishPost(input: PublishPostInput!)` GraphQL mutation, `Authorization: Bearer <PAT>`, tags
+  as `{name, slug}` objects. GraphQL errors surface in the response body even on HTTP 200 — the
+  target explicitly checks the `errors` field, not just HTTP status.
+- **Both external targets reject `--update`** with a clear error (v1 scope cut — only the m2s2
+  target's create-vs-update distinction was actually specified).
+- **Tests**: `httpmock` (new dev-dependency) mocks the HTTP layer per target — request shape
+  (headers, body, method, query params) and response parsing (including the Hashnode
+  errors-on-200 case and the m2s2 409-conflict case) are asserted against a real local server,
+  not just reasoned about. 16 new unit tests, all passing; full suite (39) and clippy clean.
+  Manually smoke-tested the built binary too (`m2s2 publish post.md --to devto` with a fake key
+  against the *real* dev.to API — got a clean 403, confirming the request actually reaches
+  their API and the CLI's error/exit-code path works end to end).
+- **Not done**: no integration/e2e test added to `tests/e2e.rs` (would need each target's real
+  credentials, so out of scope for the offline/CI-friendly e2e suite); `--auth yes`/`--billing
+  yes` and CDK-synth coverage gaps noted above are still open, unrelated to this feature.

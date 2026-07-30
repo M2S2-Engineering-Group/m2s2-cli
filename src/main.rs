@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod npm;
+mod publish;
 mod scaffold;
 mod types;
 mod utils;
@@ -45,6 +46,8 @@ enum Commands {
     Test(commands::run::TestArgs),
     /// Lint the project
     Lint(commands::run::LintArgs),
+    /// Publish a Markdown article to one or more configured targets
+    Publish(commands::publish::PublishArgs),
     /// Check for and install updates
     Upgrade(commands::upgrade::UpgradeArgs),
     /// Install shell completions (auto-detects shell from $SHELL)
@@ -74,6 +77,7 @@ async fn main() -> Result<()> {
         Commands::Build(args) => commands::run::build(args).await,
         Commands::Test(args) => commands::run::test(args).await,
         Commands::Lint(args) => commands::run::lint(args).await,
+        Commands::Publish(args) => commands::publish::run(args).await,
         Commands::Upgrade(args) => commands::upgrade::run(args).await,
         Commands::Completions { shell } => {
             let shell = match shell {
