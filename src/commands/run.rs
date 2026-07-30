@@ -154,8 +154,8 @@ fn spawn_backend_dev(dir: &Path) -> Result<std::process::Child> {
         "python" => {
             let api_fw = resolve_api_framework().unwrap_or_default();
             let py_args = python_dev_args(&api_fw);
-            print_cmd(&format!("python3 -m {}", py_args.join(" ")));
-            Command::new("python3")
+            print_cmd(&format!(".venv/bin/python3 -m {}", py_args.join(" ")));
+            Command::new(".venv/bin/python3")
                 .arg("-m")
                 .args(&py_args)
                 .current_dir(dir)
@@ -177,7 +177,7 @@ fn run_backend_build(extra: &[String], dir: &Path) -> Result<()> {
     match current_runtime().as_str() {
         "node" => run_npm_script("build", extra, dir),
         "python" => Ok(()), // Python has no build step
-        _ => run_go(&["build", "-o", "bin/api", "./..."], extra, dir),
+        _ => run_go(&["build", "-o", "bin/api", "."], extra, dir),
     }
 }
 
@@ -192,7 +192,7 @@ fn run_backend_test(extra: &[String], dir: &Path) -> Result<()> {
 fn run_backend_lint(extra: &[String], dir: &Path) -> Result<()> {
     match current_runtime().as_str() {
         "node" => run_npm_script("lint", extra, dir),
-        "python" => run_python_module("ruff", &prepend("check .", extra), dir),
+        "python" => run_python_module("ruff", &prepend2("check", ".", extra), dir),
         _ => run_go(&["vet", "./..."], extra, dir),
     }
 }
@@ -263,8 +263,8 @@ fn run_python_module(module: &str, extra: &[String], dir: &Path) -> Result<()> {
     } else {
         format!(" {}", extra.join(" "))
     };
-    print_cmd(&format!("python3 -m {module}{extra_str}"));
-    let status = Command::new("python3")
+    print_cmd(&format!(".venv/bin/python3 -m {module}{extra_str}"));
+    let status = Command::new(".venv/bin/python3")
         .args(["-m", module])
         .args(extra)
         .current_dir(dir)
@@ -301,8 +301,8 @@ fn print_cmd(cmd: &str) {
     println!("{} {}", style("→").dim(), style(cmd).cyan().bold());
 }
 
-fn prepend(first: &str, rest: &[String]) -> Vec<String> {
-    let mut v = vec![first.to_string()];
+fn prepend2(first: &str, second: &str, rest: &[String]) -> Vec<String> {
+    let mut v = vec![first.to_string(), second.to_string()];
     v.extend_from_slice(rest);
     v
 }
