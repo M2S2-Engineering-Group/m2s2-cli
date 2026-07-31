@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-07-31
+
+### Bug Fixes
+- Angular jest-preset-angular v17 setup API + e2e sandbox dev-spawn skip
+- Sync template dependencies to latest @m2s2 releases
+- Formatting and test fixes
+- Clippy fix
+
+### Features
+- Add `m2s2 publish` command for cross-posting blog articles
+- Add cover image support to publishers
+
+
 ## [0.2.15] - 2026-07-30
 
 ### Bug Fixes
