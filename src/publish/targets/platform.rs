@@ -21,7 +21,11 @@ impl Platform {
         let path = cfg.path.clone().unwrap_or_else(|| DEFAULT_PATH.to_string());
         Self {
             token: cfg.token.clone(),
-            path: if path.starts_with('/') { path } else { format!("/{path}") },
+            path: if path.starts_with('/') {
+                path
+            } else {
+                format!("/{path}")
+            },
             body_command: cfg.body_command.clone(),
             http: HttpTarget::new(client, cfg.endpoint.trim_end_matches('/')),
         }
@@ -47,7 +51,10 @@ struct BlogPostRequest<'a> {
     cover_image_filename: Option<&'a str>,
     #[serde(rename = "coverImageData", skip_serializing_if = "Option::is_none")]
     cover_image_data: Option<&'a str>,
-    #[serde(rename = "coverImageContentType", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "coverImageContentType",
+        skip_serializing_if = "Option::is_none"
+    )]
     cover_image_content_type: Option<&'a str>,
     content: &'a str,
 }
@@ -87,7 +94,11 @@ impl Platform {
         }
 
         Ok(PublishOutcome {
-            message: if update { "updated".to_string() } else { "created".to_string() },
+            message: if update {
+                "updated".to_string()
+            } else {
+                "created".to_string()
+            },
         })
     }
 
@@ -141,12 +152,22 @@ fn run_body_command(command: &str, article: &Article, update: bool) -> Result<se
         .spawn()
         .with_context(|| format!("failed to run body_command `{command}`"))?;
 
-    child
+    // The child may exit (closing its stdin) before or while we write — e.g. plain `echo`
+    // never reads stdin at all. That alone isn't a failure: the child's exit status and
+    // stdout, checked below, are the real source of truth. Only a write error that ISN'T the
+    // child simply hanging up is treated as fatal here.
+    if let Err(err) = child
         .stdin
         .take()
         .expect("stdin was piped")
         .write_all(&payload)
-        .with_context(|| format!("failed to write the article to body_command `{command}`'s stdin"))?;
+    {
+        if err.kind() != std::io::ErrorKind::BrokenPipe {
+            return Err(err).with_context(|| {
+                format!("failed to write the article to body_command `{command}`'s stdin")
+            });
+        }
+    }
 
     let output = child
         .wait_with_output()
@@ -160,9 +181,8 @@ fn run_body_command(command: &str, article: &Article, update: bool) -> Result<se
         );
     }
 
-    serde_json::from_slice(&output.stdout).with_context(|| {
-        format!("body_command `{command}` didn't print a JSON object on stdout")
-    })
+    serde_json::from_slice(&output.stdout)
+        .with_context(|| format!("body_command `{command}` didn't print a JSON object on stdout"))
 }
 
 #[cfg(target_os = "windows")]
@@ -219,7 +239,12 @@ mod tests {
 
         let target = Platform::new(
             reqwest::Client::new(),
-            &PlatformConfig { endpoint: server.base_url(), path: None, token: "tok".into(), body_command: None },
+            &PlatformConfig {
+                endpoint: server.base_url(),
+                path: None,
+                token: "tok".into(),
+                body_command: None,
+            },
         );
         let outcome = target.publish(&article, false).await.unwrap();
         mock.assert();
@@ -233,13 +258,20 @@ mod tests {
         let article = sample_article(&dir);
 
         let mock = server.mock(|when, then| {
-            when.method(PUT).path("/admin/blog").query_param("slug", "hello");
+            when.method(PUT)
+                .path("/admin/blog")
+                .query_param("slug", "hello");
             then.status(200).body(r#"{"message":"post updated"}"#);
         });
 
         let target = Platform::new(
             reqwest::Client::new(),
-            &PlatformConfig { endpoint: server.base_url(), path: None, token: "tok".into(), body_command: None },
+            &PlatformConfig {
+                endpoint: server.base_url(),
+                path: None,
+                token: "tok".into(),
+                body_command: None,
+            },
         );
         let outcome = target.publish(&article, true).await.unwrap();
         mock.assert();
@@ -267,7 +299,12 @@ mod tests {
 
         let target = Platform::new(
             reqwest::Client::new(),
-            &PlatformConfig { endpoint: server.base_url(), path: None, token: "tok".into(), body_command: None },
+            &PlatformConfig {
+                endpoint: server.base_url(),
+                path: None,
+                token: "tok".into(),
+                body_command: None,
+            },
         );
         target.publish(&article, false).await.unwrap();
         mock.assert();
@@ -277,7 +314,9 @@ mod tests {
     async fn cover_image_local_path_is_uploaded_as_base64() {
         let server = MockServer::start();
         let dir = TempDir::new().unwrap();
-        dir.child("hero.png").write_binary(&[0x89, 0x50, 0x4e, 0x47]).unwrap();
+        dir.child("hero.png")
+            .write_binary(&[0x89, 0x50, 0x4e, 0x47])
+            .unwrap();
         let file = dir.child("post.md");
         file.write_str(
             "---\ntitle: \"Hello\"\nslug: hello\ndate: 2026-07-30\nsummary: \"s\"\n\
@@ -296,7 +335,12 @@ mod tests {
 
         let target = Platform::new(
             reqwest::Client::new(),
-            &PlatformConfig { endpoint: server.base_url(), path: None, token: "tok".into(), body_command: None },
+            &PlatformConfig {
+                endpoint: server.base_url(),
+                path: None,
+                token: "tok".into(),
+                body_command: None,
+            },
         );
         target.publish(&article, false).await.unwrap();
         mock.assert();
@@ -346,8 +390,32 @@ mod tests {
                 path: None,
                 token: "tok".into(),
                 body_command: Some(
-                    r#"echo '{"custom":"shape","heading":"Hello"}'"#.to_string(),
+                    r#"cat >/dev/null; echo '{"custom":"shape","heading":"Hello"}'"#.to_string(),
                 ),
+            },
+        );
+        target.publish(&article, false).await.unwrap();
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn body_command_that_ignores_stdin_still_succeeds() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let article = sample_article(&dir);
+
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/admin/blog");
+            then.status(201).body(r#"{"message":"post created"}"#);
+        });
+
+        let target = Platform::new(
+            reqwest::Client::new(),
+            &PlatformConfig {
+                endpoint: server.base_url(),
+                path: None,
+                token: "tok".into(),
+                body_command: Some(r#"echo '{"ignored":"stdin"}'"#.to_string()),
             },
         );
         target.publish(&article, false).await.unwrap();
@@ -392,7 +460,7 @@ mod tests {
                 endpoint: "http://unused".to_string(),
                 path: None,
                 token: "tok".into(),
-                body_command: Some("echo 'not json' >&2; exit 1".to_string()),
+                body_command: Some("cat >/dev/null; echo 'not json' >&2; exit 1".to_string()),
             },
         );
         let err = target.publish(&article, false).await.unwrap_err();
@@ -410,7 +478,7 @@ mod tests {
                 endpoint: "http://unused".to_string(),
                 path: None,
                 token: "tok".into(),
-                body_command: Some("echo 'not json'".to_string()),
+                body_command: Some("cat >/dev/null; echo 'not json'".to_string()),
             },
         );
         let err = target.publish(&article, false).await.unwrap_err();
@@ -430,7 +498,12 @@ mod tests {
 
         let target = Platform::new(
             reqwest::Client::new(),
-            &PlatformConfig { endpoint: server.base_url(), path: None, token: "tok".into(), body_command: None },
+            &PlatformConfig {
+                endpoint: server.base_url(),
+                path: None,
+                token: "tok".into(),
+                body_command: None,
+            },
         );
         let err = target.publish(&article, false).await.unwrap_err();
         assert!(err.to_string().contains("--update"));

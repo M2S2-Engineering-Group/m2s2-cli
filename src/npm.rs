@@ -338,7 +338,7 @@ async fn max_satisfying_own_peer(
 }
 
 async fn fetch_meta(client: &Client, package: &str) -> Result<NpmPackageMeta> {
-    let url = format!("https://registry.npmjs.org/{}/latest", package);
+    let url = format!("https://registry.npmjs.org/{package}/latest");
     client
         .get(&url)
         .send()

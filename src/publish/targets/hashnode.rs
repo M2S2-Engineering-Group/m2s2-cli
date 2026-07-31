@@ -24,7 +24,11 @@ impl Hashnode {
         Self::with_endpoint(client, cfg, "https://gql.hashnode.com")
     }
 
-    fn with_endpoint(client: reqwest::Client, cfg: &HashnodeConfig, endpoint: impl Into<String>) -> Self {
+    fn with_endpoint(
+        client: reqwest::Client,
+        cfg: &HashnodeConfig,
+        endpoint: impl Into<String>,
+    ) -> Self {
         Self {
             token: cfg.token.clone(),
             publication_id: cfg.publication_id.clone(),
@@ -79,12 +83,15 @@ impl Hashnode {
             tags: article
                 .tags
                 .iter()
-                .map(|t| Tag { name: t.clone(), slug: slugify(t) })
+                .map(|t| Tag {
+                    name: t.clone(),
+                    slug: slugify(t),
+                })
                 .collect(),
             slug: &article.slug,
-            cover_image_options: cover_url
-                .as_deref()
-                .map(|url| CoverImageOptions { cover_image_url: url }),
+            cover_image_options: cover_url.as_deref().map(|url| CoverImageOptions {
+                cover_image_url: url,
+            }),
         };
 
         let resp = self
@@ -159,7 +166,10 @@ mod tests {
 
         let target = Hashnode::with_endpoint(
             reqwest::Client::new(),
-            &HashnodeConfig { token: "secret-pat".into(), publication_id: "pub1".into() },
+            &HashnodeConfig {
+                token: "secret-pat".into(),
+                publication_id: "pub1".into(),
+            },
             server.base_url(),
         );
 
@@ -183,7 +193,10 @@ mod tests {
 
         let target = Hashnode::with_endpoint(
             reqwest::Client::new(),
-            &HashnodeConfig { token: "t".into(), publication_id: "p".into() },
+            &HashnodeConfig {
+                token: "t".into(),
+                publication_id: "p".into(),
+            },
             server.base_url(),
         );
 
@@ -214,7 +227,10 @@ mod tests {
 
         let target = Hashnode::with_endpoint(
             reqwest::Client::new(),
-            &HashnodeConfig { token: "t".into(), publication_id: "p".into() },
+            &HashnodeConfig {
+                token: "t".into(),
+                publication_id: "p".into(),
+            },
             server.base_url(),
         );
         target.publish(&article, false).await.unwrap();
@@ -235,10 +251,16 @@ mod tests {
 
         let target = Hashnode::with_endpoint(
             reqwest::Client::new(),
-            &HashnodeConfig { token: "t".into(), publication_id: "p".into() },
+            &HashnodeConfig {
+                token: "t".into(),
+                publication_id: "p".into(),
+            },
             "http://unused",
         );
         let err = target.publish(&article, false).await.unwrap_err();
-        assert!(err.to_string().contains("only accepts an already-hosted URL"));
+        assert!(
+            err.to_string()
+                .contains("only accepts an already-hosted URL")
+        );
     }
 }

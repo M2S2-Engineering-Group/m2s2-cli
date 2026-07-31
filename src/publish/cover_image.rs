@@ -32,8 +32,12 @@ pub fn resolve(article: &Article) -> Result<Option<CoverImage>> {
     }
 
     let path = article.base_dir.join(raw);
-    let bytes = std::fs::read(&path)
-        .with_context(|| format!("cover_image '{raw}' looks like a local path but couldn't be read at {}", path.display()))?;
+    let bytes = std::fs::read(&path).with_context(|| {
+        format!(
+            "cover_image '{raw}' looks like a local path but couldn't be read at {}",
+            path.display()
+        )
+    })?;
     let filename = path
         .file_name()
         .and_then(|f| f.to_str())
@@ -48,7 +52,11 @@ pub fn resolve(article: &Article) -> Result<Option<CoverImage>> {
 }
 
 fn guess_content_type(path: &std::path::Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()) {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+    {
         Some(ext) if ext == "png" => "image/png",
         Some(ext) if ext == "gif" => "image/gif",
         Some(ext) if ext == "webp" => "image/webp",
@@ -95,7 +103,9 @@ mod tests {
     #[test]
     fn local_path_is_read_and_base64_encoded() {
         let dir = TempDir::new().unwrap();
-        dir.child("hero.png").write_binary(&[0x89, 0x50, 0x4e, 0x47]).unwrap();
+        dir.child("hero.png")
+            .write_binary(&[0x89, 0x50, 0x4e, 0x47])
+            .unwrap();
         let article = article_with_cover(&dir, "cover_image: hero.png");
 
         match resolve(&article).unwrap().unwrap() {

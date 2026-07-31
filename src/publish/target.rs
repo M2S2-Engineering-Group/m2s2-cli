@@ -21,7 +21,10 @@ pub struct HttpTarget {
 
 impl HttpTarget {
     pub fn new(client: reqwest::Client, base_url: impl Into<String>) -> Self {
-        Self { client, base_url: base_url.into() }
+        Self {
+            client,
+            base_url: base_url.into(),
+        }
     }
 }
 

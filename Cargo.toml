@@ -38,6 +38,7 @@ assert_cmd = "2"
 assert_fs = "1"
 predicates = "3"
 httpmock = "0.7"
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-fmt", "run-cargo-clippy", "run-cargo-test"] }
 
 # The profile that 'dist' will build with
 [profile.dist]

@@ -83,8 +83,7 @@ pub async fn run(args: PageArgs) -> Result<()> {
     if framework == "angular" {
         println!("  {} add to app.routes.ts:", style("next").dim());
         println!(
-            "    {{ path: '{}', loadComponent: () => import('./pages/{}/{}.component') }}",
-            kebab, kebab, kebab,
+            "    {{ path: '{kebab}', loadComponent: () => import('./pages/{kebab}/{kebab}.component') }}",
         );
         println!();
     }

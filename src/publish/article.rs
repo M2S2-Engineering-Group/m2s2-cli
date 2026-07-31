@@ -42,8 +42,8 @@ struct Frontmatter {
 ///
 /// `cli_targets`, if given (from `--to`), overrides the frontmatter's `publish:` list.
 pub fn parse_article(path: &Path, cli_targets: Option<&[TargetKind]>) -> Result<Article> {
-    let raw =
-        std::fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let raw = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
 
     let (fm_src, body) = split_frontmatter(&raw).with_context(|| {
         format!(
@@ -150,7 +150,10 @@ mod tests {
         assert_eq!(article.slug, "my-post");
         assert_eq!(article.date, "2026-07-30");
         assert_eq!(article.tags, vec!["rust", "cli"]);
-        assert_eq!(article.targets, vec![TargetKind::Devto, TargetKind::Platform]);
+        assert_eq!(
+            article.targets,
+            vec![TargetKind::Devto, TargetKind::Platform]
+        );
         assert_eq!(article.content, "# Hello\n\nBody text.");
     }
 

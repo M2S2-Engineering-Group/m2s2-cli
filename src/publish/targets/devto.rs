@@ -15,7 +15,11 @@ impl DevTo {
         Self::with_base_url(client, cfg, "https://dev.to")
     }
 
-    fn with_base_url(client: reqwest::Client, cfg: &DevToConfig, base_url: impl Into<String>) -> Self {
+    fn with_base_url(
+        client: reqwest::Client,
+        cfg: &DevToConfig,
+        base_url: impl Into<String>,
+    ) -> Self {
         Self {
             api_key: cfg.api_key.clone(),
             http: HttpTarget::new(client, base_url),
@@ -50,7 +54,9 @@ impl DevTo {
 
         let main_image = match cover_image::resolve(article)? {
             Some(CoverImage::Url(url)) => Some(url),
-            Some(CoverImage::Local(_)) => return Err(cover_image::local_path_not_supported_error("devto")),
+            Some(CoverImage::Local(_)) => {
+                return Err(cover_image::local_path_not_supported_error("devto"));
+            }
             None => None,
         };
 
@@ -60,7 +66,13 @@ impl DevTo {
                 body_markdown: &article.content,
                 published: true,
                 description: &article.summary,
-                tags: article.tags.iter().take(4).cloned().collect::<Vec<_>>().join(","),
+                tags: article
+                    .tags
+                    .iter()
+                    .take(4)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(","),
                 main_image: main_image.as_deref(),
                 canonical_url: article.canonical_url.as_deref(),
             },
@@ -124,14 +136,18 @@ mod tests {
             when.method(POST)
                 .path("/api/articles")
                 .header("api-key", "secret")
-                .json_body_partial(r#"{"article":{"title":"Hello","tags":"rust,cli,testing,extra"}}"#);
+                .json_body_partial(
+                    r#"{"article":{"title":"Hello","tags":"rust,cli,testing,extra"}}"#,
+                );
             then.status(201)
                 .json_body(serde_json::json!({"url": "https://dev.to/x/hello"}));
         });
 
         let target = DevTo::with_base_url(
             reqwest::Client::new(),
-            &DevToConfig { api_key: "secret".into() },
+            &DevToConfig {
+                api_key: "secret".into(),
+            },
             server.base_url(),
         );
 
@@ -153,7 +169,9 @@ mod tests {
 
         let target = DevTo::with_base_url(
             reqwest::Client::new(),
-            &DevToConfig { api_key: "secret".into() },
+            &DevToConfig {
+                api_key: "secret".into(),
+            },
             server.base_url(),
         );
 
@@ -165,8 +183,13 @@ mod tests {
     async fn update_is_not_supported() {
         let dir = TempDir::new().unwrap();
         let article = sample_article(&dir);
-        let target =
-            DevTo::with_base_url(reqwest::Client::new(), &DevToConfig { api_key: "x".into() }, "http://unused");
+        let target = DevTo::with_base_url(
+            reqwest::Client::new(),
+            &DevToConfig {
+                api_key: "x".into(),
+            },
+            "http://unused",
+        );
         let err = target.publish(&article, true).await.unwrap_err();
         assert!(err.to_string().contains("doesn't support --update"));
     }
@@ -187,12 +210,15 @@ mod tests {
             when.method(POST)
                 .path("/api/articles")
                 .json_body_partial(r#"{"article":{"main_image":"https://example.com/hero.jpg"}}"#);
-            then.status(201).json_body(serde_json::json!({"url": "https://dev.to/x/hello"}));
+            then.status(201)
+                .json_body(serde_json::json!({"url": "https://dev.to/x/hello"}));
         });
 
         let target = DevTo::with_base_url(
             reqwest::Client::new(),
-            &DevToConfig { api_key: "x".into() },
+            &DevToConfig {
+                api_key: "x".into(),
+            },
             server.base_url(),
         );
         target.publish(&article, false).await.unwrap();
@@ -211,9 +237,17 @@ mod tests {
         .unwrap();
         let article = parse_article(file.path(), None).unwrap();
 
-        let target =
-            DevTo::with_base_url(reqwest::Client::new(), &DevToConfig { api_key: "x".into() }, "http://unused");
+        let target = DevTo::with_base_url(
+            reqwest::Client::new(),
+            &DevToConfig {
+                api_key: "x".into(),
+            },
+            "http://unused",
+        );
         let err = target.publish(&article, false).await.unwrap_err();
-        assert!(err.to_string().contains("only accepts an already-hosted URL"));
+        assert!(
+            err.to_string()
+                .contains("only accepts an already-hosted URL")
+        );
     }
 }
