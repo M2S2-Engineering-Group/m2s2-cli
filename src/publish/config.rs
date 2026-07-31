@@ -7,7 +7,7 @@ pub const CONFIG_FILE: &str = ".m2s2-publish.toml";
 pub struct PublishConfig {
     pub devto: Option<DevToConfig>,
     pub hashnode: Option<HashnodeConfig>,
-    pub m2s2: Option<M2s2Config>,
+    pub platform: Option<PlatformConfig>,
 }
 
 #[derive(Deserialize)]
@@ -21,13 +21,25 @@ pub struct HashnodeConfig {
     pub publication_id: String,
 }
 
+/// Any blog with a dedicated create/update API following the same shape this target speaks
+/// (JSON body, bearer auth) — not specific to any one site. Nothing about a particular
+/// deployment (path, credentials) is hardcoded in the tool itself; it all comes from here.
 #[derive(Deserialize)]
-pub struct M2s2Config {
-    /// Base URL of the m2s2-platform API, e.g. `https://api.m2s2.io` — `/admin/blog` is
-    /// appended by the target itself.
+pub struct PlatformConfig {
+    /// Base URL of the blog's API, e.g. `https://api.example.com`.
     pub endpoint: String,
-    /// Cognito JWT (admin group) bearer token. Short-lived; refresh manually when it expires.
+    /// Path appended to `endpoint` for both create (`POST <path>`) and update
+    /// (`PUT <path>?slug=...`). Defaults to `/admin/blog` — override if your deployment mounts
+    /// its blog API elsewhere.
+    pub path: Option<String>,
+    /// Bearer token sent as `Authorization: Bearer <token>`. Short-lived tokens (e.g. a Cognito
+    /// JWT) need to be refreshed manually when they expire.
     pub token: String,
+    /// If set, this command builds the request body instead of the built-in field mapping: the
+    /// article (plus `update: true/false`) is piped to it as JSON on stdin, and whatever JSON
+    /// object it prints on stdout is sent verbatim as the request body. Run through a shell
+    /// (`sh -c` / `cmd /C`), so it can be a script path or a full command line with arguments.
+    pub body_command: Option<String>,
 }
 
 impl PublishConfig {

@@ -1,5 +1,6 @@
 use crate::publish::article::Article;
 use crate::publish::config::DevToConfig;
+use crate::publish::cover_image::{self, CoverImage};
 use crate::publish::target::{HttpTarget, PublishOutcome};
 use anyhow::{Result, bail};
 use serde::Serialize;
@@ -47,6 +48,12 @@ impl DevTo {
             bail!("the devto target doesn't support --update yet");
         }
 
+        let main_image = match cover_image::resolve(article)? {
+            Some(CoverImage::Url(url)) => Some(url),
+            Some(CoverImage::Local(_)) => return Err(cover_image::local_path_not_supported_error("devto")),
+            None => None,
+        };
+
         let body = ArticleBody {
             article: ArticleFields {
                 title: &article.title,
@@ -54,7 +61,7 @@ impl DevTo {
                 published: true,
                 description: &article.summary,
                 tags: article.tags.iter().take(4).cloned().collect::<Vec<_>>().join(","),
-                main_image: article.cover_image.as_deref(),
+                main_image: main_image.as_deref(),
                 canonical_url: article.canonical_url.as_deref(),
             },
         };
@@ -162,5 +169,51 @@ mod tests {
             DevTo::with_base_url(reqwest::Client::new(), &DevToConfig { api_key: "x".into() }, "http://unused");
         let err = target.publish(&article, true).await.unwrap_err();
         assert!(err.to_string().contains("doesn't support --update"));
+    }
+
+    #[tokio::test]
+    async fn cover_image_url_is_sent_as_main_image() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let file = dir.child("post.md");
+        file.write_str(
+            "---\ntitle: \"Hello\"\ndate: 2026-07-30\nsummary: \"s\"\n\
+             cover_image: https://example.com/hero.jpg\npublish: [devto]\n---\nBody.\n",
+        )
+        .unwrap();
+        let article = parse_article(file.path(), None).unwrap();
+
+        let mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/api/articles")
+                .json_body_partial(r#"{"article":{"main_image":"https://example.com/hero.jpg"}}"#);
+            then.status(201).json_body(serde_json::json!({"url": "https://dev.to/x/hello"}));
+        });
+
+        let target = DevTo::with_base_url(
+            reqwest::Client::new(),
+            &DevToConfig { api_key: "x".into() },
+            server.base_url(),
+        );
+        target.publish(&article, false).await.unwrap();
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn cover_image_local_path_is_a_clear_error() {
+        let dir = TempDir::new().unwrap();
+        dir.child("hero.jpg").write_binary(&[0xff, 0xd8]).unwrap();
+        let file = dir.child("post.md");
+        file.write_str(
+            "---\ntitle: \"Hello\"\ndate: 2026-07-30\nsummary: \"s\"\n\
+             cover_image: hero.jpg\npublish: [devto]\n---\nBody.\n",
+        )
+        .unwrap();
+        let article = parse_article(file.path(), None).unwrap();
+
+        let target =
+            DevTo::with_base_url(reqwest::Client::new(), &DevToConfig { api_key: "x".into() }, "http://unused");
+        let err = target.publish(&article, false).await.unwrap_err();
+        assert!(err.to_string().contains("only accepts an already-hosted URL"));
     }
 }

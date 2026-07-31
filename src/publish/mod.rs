@@ -1,5 +1,6 @@
 pub mod article;
 pub mod config;
+pub mod cover_image;
 pub mod target;
 pub mod target_kind;
 pub mod targets;

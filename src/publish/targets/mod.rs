@@ -1,6 +1,6 @@
 pub mod devto;
 pub mod hashnode;
-pub mod m2s2;
+pub mod platform;
 
 use crate::publish::config::PublishConfig;
 use crate::publish::target::Target;
@@ -25,21 +25,30 @@ fn build_one(kind: TargetKind, client: &reqwest::Client, config: &PublishConfig)
                 .hashnode
                 .as_ref()
                 .context("no [hashnode] section in .m2s2-publish.toml")?;
-            Ok(Target::Hashnode(hashnode::Hashnode::new(client.clone(), cfg)))
+            Ok(Target::Hashnode(hashnode::Hashnode::new(
+                client.clone(),
+                cfg,
+            )))
         }
-        TargetKind::M2s2 => {
+        TargetKind::Platform => {
             let cfg = config
-                .m2s2
+                .platform
                 .as_ref()
-                .context("no [m2s2] section in .m2s2-publish.toml")?;
-            Ok(Target::M2s2(m2s2::M2s2::new(client.clone(), cfg)))
+                .context("no [platform] section in .m2s2-publish.toml")?;
+            Ok(Target::Platform(platform::Platform::new(
+                client.clone(),
+                cfg,
+            )))
         }
     }
 }
 
 pub fn build_targets(kinds: &[TargetKind], config: &PublishConfig) -> Result<Vec<Target>> {
     let client = reqwest::Client::new();
-    kinds.iter().map(|kind| build_one(*kind, &client, config)).collect()
+    kinds
+        .iter()
+        .map(|kind| build_one(*kind, &client, config))
+        .collect()
 }
 
 #[cfg(test)]
@@ -52,9 +61,11 @@ mod tests {
 
     #[test]
     fn known_target_without_config_section_is_a_clear_error() {
-        let Err(err) =
-            build_one(TargetKind::Devto, &reqwest::Client::new(), &PublishConfig::default())
-        else {
+        let Err(err) = build_one(
+            TargetKind::Devto,
+            &reqwest::Client::new(),
+            &PublishConfig::default(),
+        ) else {
             panic!("expected an error");
         };
         assert!(err.to_string().contains("no [devto] section"));

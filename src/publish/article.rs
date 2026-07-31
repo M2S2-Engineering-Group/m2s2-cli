@@ -1,10 +1,10 @@
 use crate::publish::target_kind::TargetKind;
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// A parsed article: YAML frontmatter + Markdown body.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Article {
     pub title: String,
     pub slug: String,
@@ -12,10 +12,15 @@ pub struct Article {
     pub summary: String,
     pub excerpt: Option<String>,
     pub tags: Vec<String>,
+    /// Raw frontmatter value — a URL, or a path to a local file resolved relative to
+    /// `base_dir`. See `publish::cover_image` for how targets are expected to tell these apart.
     pub cover_image: Option<String>,
     pub canonical_url: Option<String>,
     pub targets: Vec<TargetKind>,
     pub content: String,
+    /// The directory containing the source Markdown file — relative paths in frontmatter (e.g.
+    /// a local `cover_image`) are resolved against this.
+    pub base_dir: PathBuf,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +70,8 @@ pub fn parse_article(path: &Path, cli_targets: Option<&[TargetKind]>) -> Result<
         );
     }
 
+    let base_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
+
     Ok(Article {
         title: fm.title,
         slug,
@@ -76,6 +83,7 @@ pub fn parse_article(path: &Path, cli_targets: Option<&[TargetKind]>) -> Result<
         canonical_url: fm.canonical_url,
         targets,
         content: body.trim().to_string(),
+        base_dir,
     })
 }
 
@@ -129,7 +137,7 @@ mod tests {
              date: 2026-07-30\n\
              summary: \"A test post\"\n\
              tags: [rust, cli]\n\
-             publish: [devto, m2s2]\n\
+             publish: [devto, platform]\n\
              ---\n\
              \n\
              # Hello\n\
@@ -142,7 +150,7 @@ mod tests {
         assert_eq!(article.slug, "my-post");
         assert_eq!(article.date, "2026-07-30");
         assert_eq!(article.tags, vec!["rust", "cli"]);
-        assert_eq!(article.targets, vec![TargetKind::Devto, TargetKind::M2s2]);
+        assert_eq!(article.targets, vec![TargetKind::Devto, TargetKind::Platform]);
         assert_eq!(article.content, "# Hello\n\nBody text.");
     }
 

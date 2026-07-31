@@ -2,7 +2,7 @@ use crate::publish::article::Article;
 use crate::publish::target_kind::TargetKind;
 use crate::publish::targets::devto::DevTo;
 use crate::publish::targets::hashnode::Hashnode;
-use crate::publish::targets::m2s2::M2s2;
+use crate::publish::targets::platform::Platform;
 use anyhow::Result;
 
 #[derive(Debug)]
@@ -33,7 +33,7 @@ impl HttpTarget {
 pub enum Target {
     Devto(DevTo),
     Hashnode(Hashnode),
-    M2s2(M2s2),
+    Platform(Platform),
 }
 
 impl Target {
@@ -41,7 +41,7 @@ impl Target {
         match self {
             Self::Devto(_) => TargetKind::Devto,
             Self::Hashnode(_) => TargetKind::Hashnode,
-            Self::M2s2(_) => TargetKind::M2s2,
+            Self::Platform(_) => TargetKind::Platform,
         }
     }
 
@@ -51,7 +51,7 @@ impl Target {
         match self {
             Self::Devto(t) => t.publish(article, update).await,
             Self::Hashnode(t) => t.publish(article, update).await,
-            Self::M2s2(t) => t.publish(article, update).await,
+            Self::Platform(t) => t.publish(article, update).await,
         }
     }
 }

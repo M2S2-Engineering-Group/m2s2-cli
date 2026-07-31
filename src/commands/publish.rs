@@ -13,6 +13,11 @@ Frontmatter fields: title, date, summary, tags, slug (optional, derived from the
 excerpt (optional), cover_image (optional), canonical_url (optional), and publish (a list of
 target names — overridden by --to when given).
 
+cover_image can be a URL (used as-is) or a path to a local file, resolved relative to the
+article. A local path is uploaded automatically for the platform target; Dev.to and Hashnode
+have no image upload endpoint in their APIs, so a local path there is an error — host the image
+yourself first and use its URL instead.
+
 Credentials live in .m2s2-publish.toml in the current directory, e.g.:
 
   [devto]
@@ -22,19 +27,27 @@ Credentials live in .m2s2-publish.toml in the current directory, e.g.:
   token = \"...\"
   publication_id = \"...\"
 
-  [m2s2]
-  endpoint = \"https://api.m2s2.io\"
+  [platform]
+  endpoint = \"https://api.example.com\"
+  # path = \"/admin/blog\"   (optional, this is the default)
   token = \"...\"
+  # body_command = \"./hooks/build-body.sh\"   (optional — see below)
+
+The platform target's request body is a fixed field mapping by default. Set body_command to
+build it yourself instead: the article (plus `update: true/false`) is piped to the command as
+JSON on stdin, and whatever JSON object it prints on stdout is sent verbatim as the request
+body — no merging with the default mapping. Runs through a shell, so it can be a script path or
+a full command line with arguments.
 
 Examples:
   m2s2 publish posts/my-article.md
       Publish to whatever targets are listed in the article's frontmatter.
 
-  m2s2 publish posts/my-article.md --to devto,m2s2
+  m2s2 publish posts/my-article.md --to devto,platform
       Publish to specific targets regardless of frontmatter.
 
-  m2s2 publish posts/my-article.md --to m2s2 --update
-      Update an existing m2s2 blog post instead of creating a new one.";
+  m2s2 publish posts/my-article.md --to platform --update
+      Update an existing platform blog post instead of creating a new one.";
 
 #[derive(Args)]
 #[command(after_help = AFTER_HELP)]

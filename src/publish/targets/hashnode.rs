@@ -1,5 +1,6 @@
 use crate::publish::article::{Article, slugify};
 use crate::publish::config::HashnodeConfig;
+use crate::publish::cover_image::{self, CoverImage};
 use crate::publish::target::{HttpTarget, PublishOutcome};
 use anyhow::{Result, bail};
 use serde::Serialize;
@@ -39,6 +40,12 @@ struct Tag {
 }
 
 #[derive(Serialize)]
+struct CoverImageOptions<'a> {
+    #[serde(rename = "coverImageURL")]
+    cover_image_url: &'a str,
+}
+
+#[derive(Serialize)]
 struct PublishPostInput<'a> {
     title: &'a str,
     #[serde(rename = "contentMarkdown")]
@@ -47,6 +54,8 @@ struct PublishPostInput<'a> {
     publication_id: &'a str,
     tags: Vec<Tag>,
     slug: &'a str,
+    #[serde(rename = "coverImageOptions", skip_serializing_if = "Option::is_none")]
+    cover_image_options: Option<CoverImageOptions<'a>>,
 }
 
 impl Hashnode {
@@ -54,6 +63,14 @@ impl Hashnode {
         if update {
             bail!("the hashnode target doesn't support --update yet");
         }
+
+        let cover_url = match cover_image::resolve(article)? {
+            Some(CoverImage::Url(url)) => Some(url),
+            Some(CoverImage::Local(_)) => {
+                return Err(cover_image::local_path_not_supported_error("hashnode"));
+            }
+            None => None,
+        };
 
         let input = PublishPostInput {
             title: &article.title,
@@ -65,6 +82,9 @@ impl Hashnode {
                 .map(|t| Tag { name: t.clone(), slug: slugify(t) })
                 .collect(),
             slug: &article.slug,
+            cover_image_options: cover_url
+                .as_deref()
+                .map(|url| CoverImageOptions { cover_image_url: url }),
         };
 
         let resp = self
@@ -169,5 +189,56 @@ mod tests {
 
         let err = target.publish(&article, false).await.unwrap_err();
         assert!(err.to_string().contains("Hashnode Pro"));
+    }
+
+    #[tokio::test]
+    async fn cover_image_url_is_sent_via_cover_image_options() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let file = dir.child("post.md");
+        file.write_str(
+            "---\ntitle: \"Hello\"\ndate: 2026-07-30\nsummary: \"s\"\n\
+             cover_image: https://example.com/hero.jpg\npublish: [hashnode]\n---\nBody.\n",
+        )
+        .unwrap();
+        let article = parse_article(file.path(), None).unwrap();
+
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").json_body_partial(
+                r#"{"variables":{"input":{"coverImageOptions":{"coverImageURL":"https://example.com/hero.jpg"}}}}"#,
+            );
+            then.status(200).json_body(serde_json::json!({
+                "data": { "publishPost": { "post": { "id": "1", "url": "https://blog.example.com/hello" } } }
+            }));
+        });
+
+        let target = Hashnode::with_endpoint(
+            reqwest::Client::new(),
+            &HashnodeConfig { token: "t".into(), publication_id: "p".into() },
+            server.base_url(),
+        );
+        target.publish(&article, false).await.unwrap();
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn cover_image_local_path_is_a_clear_error() {
+        let dir = TempDir::new().unwrap();
+        dir.child("hero.jpg").write_binary(&[0xff, 0xd8]).unwrap();
+        let file = dir.child("post.md");
+        file.write_str(
+            "---\ntitle: \"Hello\"\ndate: 2026-07-30\nsummary: \"s\"\n\
+             cover_image: hero.jpg\npublish: [hashnode]\n---\nBody.\n",
+        )
+        .unwrap();
+        let article = parse_article(file.path(), None).unwrap();
+
+        let target = Hashnode::with_endpoint(
+            reqwest::Client::new(),
+            &HashnodeConfig { token: "t".into(), publication_id: "p".into() },
+            "http://unused",
+        );
+        let err = target.publish(&article, false).await.unwrap_err();
+        assert!(err.to_string().contains("only accepts an already-hosted URL"));
     }
 }

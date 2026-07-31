@@ -119,35 +119,73 @@ dies with no clear panic/assertion in the log, suspect the harness rather than t
    CDK output isn't `cdk synth`-validated.
 4. Nothing has been pushed to a remote. Commits made this session are local only.
 
-## `publish` command (shipped 2026-07-30)
+## `publish` command (shipped 2026-07-30, refactored same day)
 
 New feature, unrelated to the scaffolding domain everything else in this CLI covers: `m2s2
 publish <file.md>` publishes a Markdown article (YAML frontmatter) to Dev.to, Hashnode, and/or
-the user's own m2s2-platform blog. Built as a `PublishTarget` trait (`src/publish/target.rs`) so
-adding a new connector is "implement the trait + one match arm in
-`src/publish/targets/mod.rs::build_one`" — explicitly requested by the user for extensibility,
-not a speculative abstraction.
+a generic blog "platform" target. Went through several rounds of follow-up refactoring the same
+day it shipped — this section describes the *current* shape, not the original one; don't trust
+old commit messages over this.
 
-- **Layout**: `src/publish/{article,config,target}.rs` + `src/publish/targets/{devto,hashnode,
-  m2s2}.rs`. Command glue in `src/commands/publish.rs`.
+- **Layout**: `src/publish/{article,config,target,target_kind}.rs` + `src/publish/targets/
+  {devto,hashnode,platform}.rs`. Command glue in `src/commands/publish.rs`.
+- **`TargetKind`** (`target_kind.rs`): `Devto`/`Hashnode`/`Platform` enum, derives
+  `clap::ValueEnum` + `serde::Deserialize` + `Serialize` — used for both the frontmatter
+  `publish:` list and `--to`, so an invalid name is a parse-time error (clap/serde generate the
+  "possible values" message) rather than a runtime string-match failure. Matches the existing
+  `Frontend`/`Runtime`/etc. pattern in `src/types.rs`.
+- **`Target`** (`target.rs`): plain enum (`Devto(DevTo)`/`Hashnode(Hashnode)`/
+  `Platform(Platform)`), not `Box<dyn Trait>` — deliberately no trait object here. The set of
+  targets is closed and known at compile time (a new one always means writing a match arm in
+  `targets::mod::build_one` regardless), so dyn dispatch bought indirection without buying
+  flexibility. Each concrete target has an ordinary inherent `async fn publish(...)`; there is
+  no `PublishTarget` trait and no `async-trait` dependency — both were only needed for the
+  `dyn Trait` case and got removed when it did.
+- **`HttpTarget`** (`target.rs`): shared `{client, base_url}` pair every target embeds. The
+  `reqwest::Client` is built once in `targets::build_targets` and `.clone()`d (cheap — it's
+  `Arc`-backed) into each target, instead of every target building its own connection
+  pool/TLS cache.
 - **Article format**: Markdown + YAML frontmatter (`title`, `date`, `summary`, `tags`, `slug`
   optional/derived from filename, `excerpt`/`cover_image`/`canonical_url` optional, `publish:
   [...]` target list, overridable by `--to`). Deliberately matches what `m2s2-platform`'s own
   admin blog editor already exports as Markdown (confirmed by reading
   `apps/web/src/app/admin/blog-edit/admin-blog-edit.component.ts` in that repo) — not a new,
-  competing format.
+  competing format. `Article` derives `Serialize` (used by the platform target's `body_command`
+  hook, below).
 - **Config**: `.m2s2-publish.toml` in the CWD (flat dotfile, matching `.m2s2.json`'s existing
-  convention rather than a `.m2s2/` subdirectory), `[devto]`/`[hashnode]`/`[m2s2]` sections.
-  Contains secrets — not gitignored by this repo since it lives in whatever directory the *user*
-  runs `m2s2 publish` from (their own blog-content repo), not in a scaffolded project.
-- **m2s2 target contract** verified by reading `m2s2-platform`'s actual source
-  (`apps/api/dashboard/handlers/blog.go`), not guessed: `POST /admin/blog` (create, 409 if slug
-  exists) / `PUT /admin/blog?slug=` (update), Cognito JWT bearer auth requiring the `admin`
-  Cognito group claim. **Auth is a static bearer token pasted into config, manually refreshed**
-  — deliberate v1 scope cut: the platform's real login (`apps/web/src/environments/
-  environment.prod.ts`) is Amplify/Cognito with SRP + optional TOTP MFA, which is substantial
-  scope beyond what the CLI needed today. A `m2s2 login` companion command doing the full
-  Cognito dance would be the natural fast-follow if manual token refresh gets annoying.
+  convention), `[devto]`/`[hashnode]`/`[platform]` sections. Contains secrets — not gitignored by
+  *this* repo since the file lives in whatever directory the *user* runs `m2s2 publish` from
+  (their own blog-content repo), not in a scaffolded project.
+- **The `platform` target is deliberately generic, not m2s2-specific** — user feedback
+  (2026-07-30): this is a public tool, and baking the maintainer's own site's assumptions into
+  the shipped binary is wrong twice over — it leaks implementation details of their site to
+  every reader of a public repo, *and* it means the tool is useless to anyone whose blog API
+  differs. Originally named/typed `M2s2`/`M2s2Config` (confusing alongside the unrelated
+  `M2S2Config` in `src/config.rs`, the scaffolding config) — renamed throughout to
+  `Platform`/`PlatformConfig`. Concretely, nothing about *any* specific deployment is hardcoded:
+  - `endpoint` (base URL) and `token` (bearer auth) — always were config, not hardcoded.
+  - `path` — appended to `endpoint` for both create (`POST <path>`) and update
+    (`PUT <path>?slug=...`). **Config field, defaults to `/admin/blog`** (that default is the
+    maintainer's own convention — everyone else overrides it).
+  - `body_command` — **the request body itself is now a hook, not fixed Rust field mapping.**
+    If set, the article (plus `update: true/false`) is piped to this command as JSON on stdin,
+    and whatever JSON it prints on stdout is sent **verbatim** as the request body (no merging
+    with the built-in mapping). Runs through a shell (`sh -c` / `cmd /C` on Windows), so it can
+    be a script path or a full command line with args — same shape as git hooks / husky /
+    kubectl credential plugins, deliberately *not* a WASM runtime or dylib-loading plugin
+    system: with zero second targets in sight, that would be solving a hypothetical, not
+    building a plugin ABI to carry forever for one real user.
+  - If `body_command` is unset, falls back to the original fixed field mapping (`slug`, `title`,
+    `date`, `summary`, `excerpt`, `tags`, `coverImage`, `content`) — this mapping is still what
+    `m2s2-platform` itself actually needs (verified against its real
+    `apps/api/dashboard/handlers/blog.go`), it's just no longer the *only* option.
+- **Platform auth is a static bearer token pasted into config, manually refreshed** — deliberate
+  scope cut, not yet revisited: the maintainer's own platform's real login (`apps/web/src/
+  environments/environment.prod.ts`) is Amplify/Cognito with SRP + optional TOTP MFA, which is
+  substantial scope beyond what the CLI needed. A `m2s2 login` companion command doing the full
+  Cognito dance would be the natural fast-follow if manual token refresh gets annoying — but
+  that's specific to whoever's `token` config points at a Cognito-backed API; it's not something
+  the generic `platform` target should assume either.
 - **Dev.to**: verified against current Forem API docs — `POST https://dev.to/api/articles`,
   `api-key` header, `{"article": {...}}` body, comma-joined tags (max 4).
 - **Hashnode**: verified against current docs/search (their API changed **May 2026** — legacy
@@ -156,15 +194,54 @@ not a speculative abstraction.
   `publishPost(input: PublishPostInput!)` GraphQL mutation, `Authorization: Bearer <PAT>`, tags
   as `{name, slug}` objects. GraphQL errors surface in the response body even on HTTP 200 — the
   target explicitly checks the `errors` field, not just HTTP status.
-- **Both external targets reject `--update`** with a clear error (v1 scope cut — only the m2s2
-  target's create-vs-update distinction was actually specified).
-- **Tests**: `httpmock` (new dev-dependency) mocks the HTTP layer per target — request shape
-  (headers, body, method, query params) and response parsing (including the Hashnode
-  errors-on-200 case and the m2s2 409-conflict case) are asserted against a real local server,
-  not just reasoned about. 16 new unit tests, all passing; full suite (39) and clippy clean.
-  Manually smoke-tested the built binary too (`m2s2 publish post.md --to devto` with a fake key
-  against the *real* dev.to API — got a clean 403, confirming the request actually reaches
-  their API and the CLI's error/exit-code path works end to end).
+- **Both external targets (Dev.to, Hashnode) reject `--update`** with a clear error (scope cut —
+  only the platform target's create-vs-update distinction was actually specified; no `body_command`-
+  style escape hatch for them either, since there's been no request for one).
+- **Tests**: `httpmock` (dev-dependency) mocks the HTTP layer per target — request shape
+  (headers, body, method, query params) and response parsing are asserted against a real local
+  server, not just reasoned about. The `body_command` hook tests spawn real `sh -c` subprocesses
+  (`echo`, `cat`, a deliberately failing command) rather than mocking process execution. 43 unit
+  tests total, all passing; clippy clean. Also manually smoke-tested the built binary once
+  against dev.to's real API with a fake key (clean 403 — confirms the request path and CLI
+  error/exit-code handling end to end, not just the mocked path).
 - **Not done**: no integration/e2e test added to `tests/e2e.rs` (would need each target's real
   credentials, so out of scope for the offline/CI-friendly e2e suite); `--auth yes`/`--billing
   yes` and CDK-synth coverage gaps noted above are still open, unrelated to this feature.
+  `body_command` only exists for the `platform` target, not Dev.to/Hashnode — no request for
+  that yet either.
+- **`cover_image` handling** (`src/publish/cover_image.rs`, new module, shared by all three
+  targets): the frontmatter value is resolved into either `CoverImage::Url` (starts with
+  `http://`/`https://`, passed straight through) or `CoverImage::Local` (anything else — read
+  relative to `Article::base_dir`, i.e. the directory containing the `.md` file, then base64-
+  encoded eagerly so a bad/missing local file fails before any network call happens).
+  - **Dev.to and Hashnode are verified URL-only** — checked their actual docs, not assumed: Dev.to's
+    Forem API has *no image upload endpoint at all* (`main_image` is documented as "Absolute URL
+    of the cover image"); Hashnode's `publishPost` mutation only takes
+    `coverImageOptions.coverImageURL` — note the nested-object shape, not a flat `coverImage`
+    field like `platform` uses. A local path for either target is a clear error
+    (`cover_image::local_path_not_supported_error`) telling the user to host it themselves —
+    there is no upload fallback to build for these two, because their APIs genuinely don't
+    support one.
+  - **`platform` uploads local files** using the same base64 mechanism `blog.go`'s
+    `maybeUploadCover` already expects (`coverImageFilename`/`coverImageData`/
+    `coverImageContentType`) — this was already read and understood when the platform target was
+    first built, just not wired up until now.
+- **Investigated (2026-07-30) whether the CLI should auto-host local images for Dev.to/Hashnode
+  via presigned URLs, per user suggestion — concluded not yet, and why**: checked
+  `m2s2-platform` for an existing presigned-URL/generic-upload endpoint first. Found
+  `GET /admin/resume/upload-url` (`apps/api/dashboard/handlers/resume.go`,
+  `AdminResumeUploadURL`) — but it's hardcoded to one fixed S3 key/bucket for *the* resume PDF,
+  not a generic "give me a presigned URL for this filename" endpoint. Nothing equivalent exists
+  for blog images. Also checked whether the create/update blog response could hand back the
+  uploaded image's final URL for reuse elsewhere (e.g. publish to `platform` first, then reuse
+  its now-hosted image URL for Dev.to/Hashnode in the same run) — it can't: both
+  `AdminCreateBlogPost`/`AdminUpdateBlogPost` return only `{"message": "..."}`, never the
+  computed `CoverImage` path, and the public site's base URL (`siteBaseURL` in blog.go) is a Go
+  constant, not something the API exposes — so the CLI has no reliable way to derive the final
+  URL itself either. **Conclusion: this needs new server-side work in `m2s2-platform` (a real
+  generic presign/upload endpoint, or returning the image URL in the create/update response)
+  before the CLI can build on it — it's a two-repo feature, not something `m2s2-cli` can finish
+  alone.** Not started. If picked up later: decide there first whether to go with presigned S3
+  PUT URLs (client uploads directly, platform never sees the bytes) or keep the existing
+  base64-through-Lambda pattern generalized into a standalone endpoint — the two have different
+  size limits and latency characteristics worth weighing before choosing.
