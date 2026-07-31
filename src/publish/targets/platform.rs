@@ -161,12 +161,11 @@ fn run_body_command(command: &str, article: &Article, update: bool) -> Result<se
         .take()
         .expect("stdin was piped")
         .write_all(&payload)
+        && err.kind() != std::io::ErrorKind::BrokenPipe
     {
-        if err.kind() != std::io::ErrorKind::BrokenPipe {
-            return Err(err).with_context(|| {
-                format!("failed to write the article to body_command `{command}`'s stdin")
-            });
-        }
+        return Err(err).with_context(|| {
+            format!("failed to write the article to body_command `{command}`'s stdin")
+        });
     }
 
     let output = child
