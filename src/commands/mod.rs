@@ -1,3 +1,4 @@
+pub mod content;
 pub mod generate;
 pub mod new;
 pub mod publish;

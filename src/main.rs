@@ -1,7 +1,10 @@
 mod commands;
 mod config;
+mod content;
+mod markdown;
 mod npm;
 mod publish;
+mod report;
 mod scaffold;
 mod types;
 mod utils;
@@ -48,6 +51,8 @@ enum Commands {
     Lint(commands::run::LintArgs),
     /// Publish a Markdown article to one or more configured targets
     Publish(commands::publish::PublishArgs),
+    /// Author and validate the canonical content-delivery article schema (offline)
+    Content(commands::content::ContentArgs),
     /// Check for and install updates
     Upgrade(commands::upgrade::UpgradeArgs),
     /// Install shell completions (auto-detects shell from $SHELL)
@@ -78,6 +83,7 @@ async fn main() -> Result<()> {
         Commands::Test(args) => commands::run::test(args).await,
         Commands::Lint(args) => commands::run::lint(args).await,
         Commands::Publish(args) => commands::publish::run(args).await,
+        Commands::Content(args) => commands::content::run(args),
         Commands::Upgrade(args) => commands::upgrade::run(args).await,
         Commands::Completions { shell } => {
             let shell = match shell {

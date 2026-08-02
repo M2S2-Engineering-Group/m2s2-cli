@@ -68,24 +68,50 @@ struct BodyCommandInput<'a> {
     update: bool,
 }
 
-impl Platform {
-    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
-        let body = self.build_body(article, update)?;
+/// Everything `execute` needs, computed once by `prepare` — including running `body_command`,
+/// which must happen exactly once (it may be an arbitrary side-effecting script) rather than
+/// once during preparation and again during execution.
+#[derive(Debug)]
+pub struct PreparedRequest {
+    slug: String,
+    body: serde_json::Value,
+    update: bool,
+}
 
+impl Platform {
+    /// Local-only except for `body_command`, which — being user-configured, arbitrary code — is
+    /// treated as a local side effect run at most once, here, rather than something `execute`
+    /// could safely repeat.
+    pub fn prepare(&self, article: &Article, update: bool) -> Result<PreparedRequest> {
+        Ok(PreparedRequest {
+            slug: article.slug.clone(),
+            body: self.build_body(article, update)?,
+            update,
+        })
+    }
+
+    pub async fn execute(&self, prepared: PreparedRequest) -> Result<PublishOutcome> {
         let url = format!("{}{}", self.http.base_url, self.path);
-        let req = if update {
-            self.http.client.put(&url).query(&[("slug", &article.slug)])
+        let req = if prepared.update {
+            self.http
+                .client
+                .put(&url)
+                .query(&[("slug", &prepared.slug)])
         } else {
             self.http.client.post(&url)
         };
 
-        let resp = req.bearer_auth(&self.token).json(&body).send().await?;
+        let resp = req
+            .bearer_auth(&self.token)
+            .json(&prepared.body)
+            .send()
+            .await?;
 
         let status = resp.status();
         if status.as_u16() == 409 {
             bail!(
                 "slug '{}' already exists on the platform blog — rerun with --update to overwrite it",
-                article.slug
+                prepared.slug
             );
         }
         let text = resp.text().await.unwrap_or_default();
@@ -94,7 +120,7 @@ impl Platform {
         }
 
         Ok(PublishOutcome {
-            message: if update {
+            message: if prepared.update {
                 "updated".to_string()
             } else {
                 "created".to_string()
@@ -108,7 +134,8 @@ impl Platform {
         match &self.body_command {
             Some(command) => run_body_command(command, article, update),
             None => {
-                let cover = cover_image::resolve(article)?;
+                let cover =
+                    cover_image::resolve(article.cover_image.as_deref(), &article.base_dir)?;
                 let (cover_image, cover_image_filename, cover_image_data, cover_image_content_type) =
                     match &cover {
                         Some(CoverImage::Url(url)) => (Some(url.as_str()), None, None, None),
@@ -245,7 +272,8 @@ mod tests {
                 body_command: None,
             },
         );
-        let outcome = target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        let outcome = target.execute(prepared).await.unwrap();
         mock.assert();
         assert_eq!(outcome.message, "created");
     }
@@ -272,7 +300,8 @@ mod tests {
                 body_command: None,
             },
         );
-        let outcome = target.publish(&article, true).await.unwrap();
+        let prepared = target.prepare(&article, true).unwrap();
+        let outcome = target.execute(prepared).await.unwrap();
         mock.assert();
         assert_eq!(outcome.message, "updated");
     }
@@ -305,7 +334,8 @@ mod tests {
                 body_command: None,
             },
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -341,7 +371,8 @@ mod tests {
                 body_command: None,
             },
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -365,7 +396,8 @@ mod tests {
                 body_command: None,
             },
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -393,7 +425,8 @@ mod tests {
                 ),
             },
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -417,7 +450,8 @@ mod tests {
                 body_command: Some(r#"echo '{"ignored":"stdin"}'"#.to_string()),
             },
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -444,7 +478,8 @@ mod tests {
                 body_command: Some("cat".to_string()),
             },
         );
-        target.publish(&article, true).await.unwrap();
+        let prepared = target.prepare(&article, true).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -462,7 +497,7 @@ mod tests {
                 body_command: Some("cat >/dev/null; echo 'not json' >&2; exit 1".to_string()),
             },
         );
-        let err = target.publish(&article, false).await.unwrap_err();
+        let err = target.prepare(&article, false).unwrap_err();
         assert!(err.to_string().contains("body_command"));
     }
 
@@ -480,7 +515,7 @@ mod tests {
                 body_command: Some("cat >/dev/null; echo 'not json'".to_string()),
             },
         );
-        let err = target.publish(&article, false).await.unwrap_err();
+        let err = target.prepare(&article, false).unwrap_err();
         assert!(err.to_string().contains("didn't print a JSON object"));
     }
 
@@ -504,7 +539,8 @@ mod tests {
                 body_command: None,
             },
         );
-        let err = target.publish(&article, false).await.unwrap_err();
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
         assert!(err.to_string().contains("--update"));
     }
 }

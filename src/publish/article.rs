@@ -1,3 +1,4 @@
+use crate::markdown::{slugify, split_frontmatter};
 use crate::publish::target_kind::TargetKind;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -87,35 +88,6 @@ pub fn parse_article(path: &Path, cli_targets: Option<&[TargetKind]>) -> Result<
     })
 }
 
-/// Split `---\n<yaml>\n---\n<body>` into `(yaml, body)`.
-fn split_frontmatter(raw: &str) -> Option<(String, String)> {
-    let lines: Vec<&str> = raw.lines().collect();
-    if lines.first() != Some(&"---") {
-        return None;
-    }
-    let end = lines.iter().skip(1).position(|l| *l == "---")? + 1;
-    Some((lines[1..end].join("\n"), lines[end + 1..].join("\n")))
-}
-
-/// Lowercase, alphanumeric-and-dashes slug (e.g. for tag slugs or a filename-derived post slug).
-pub fn slugify(input: &str) -> String {
-    let mut out = String::new();
-    let mut last_dash = false;
-    for c in input.chars() {
-        if c.is_alphanumeric() {
-            out.extend(c.to_lowercase());
-            last_dash = false;
-        } else if !last_dash && !out.is_empty() {
-            out.push('-');
-            last_dash = true;
-        }
-    }
-    while out.ends_with('-') {
-        out.pop();
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,12 +160,5 @@ mod tests {
             write_temp("---\ntitle: \"T\"\ndate: 2026-07-30\nsummary: \"s\"\n---\nbody\n");
         let err = parse_article(&path, None).unwrap_err();
         assert!(err.to_string().contains("no publish targets"));
-    }
-
-    #[test]
-    fn slugify_strips_punctuation_and_lowercases() {
-        assert_eq!(slugify("Hello, World!"), "hello-world");
-        assert_eq!(slugify("Rust & CLI Tools"), "rust-cli-tools");
-        assert_eq!(slugify("already-kebab"), "already-kebab");
     }
 }

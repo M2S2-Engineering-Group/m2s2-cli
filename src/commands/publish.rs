@@ -33,6 +33,13 @@ Credentials live in .m2s2-publish.toml in the current directory, e.g.:
   token = \"...\"
   # body_command = \"./hooks/build-body.sh\"   (optional — see below)
 
+If a [section] is missing entirely, its credentials fall back to environment variables instead
+(the file not existing at all is fine too, as long as env vars cover every target you select):
+M2S2_PUBLISH_DEVTO_API_KEY; M2S2_PUBLISH_HASHNODE_TOKEN + M2S2_PUBLISH_HASHNODE_PUBLICATION_ID;
+M2S2_PUBLISH_PLATFORM_ENDPOINT + M2S2_PUBLISH_PLATFORM_TOKEN (+ optional _PATH / _BODY_COMMAND).
+This only fills in a section that's entirely absent — a section that's present in the file wins
+over env vars even if some of its fields could otherwise come from the environment.
+
 The platform target's request body is a fixed field mapping by default. Set body_command to
 build it yourself instead: the article (plus `update: true/false`) is piped to the command as
 JSON on stdin, and whatever JSON object it prints on stdout is sent verbatim as the request
@@ -47,7 +54,10 @@ Examples:
       Publish to specific targets regardless of frontmatter.
 
   m2s2 publish posts/my-article.md --to platform --update
-      Update an existing platform blog post instead of creating a new one.";
+      Update an existing platform blog post instead of creating a new one.
+
+  m2s2 publish posts/my-article.md --preflight-only
+      Validate every target and build the exact request each would send, without publishing.";
 
 #[derive(Args)]
 #[command(after_help = AFTER_HELP)]
@@ -62,6 +72,10 @@ pub struct PublishArgs {
     /// Update an existing post instead of creating a new one (target-dependent support)
     #[arg(long)]
     pub update: bool,
+
+    /// Validate and build every target's request, then stop without publishing anything
+    #[arg(long)]
+    pub preflight_only: bool,
 }
 
 pub async fn run(args: PublishArgs) -> Result<()> {
@@ -69,11 +83,31 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     let config = publish::PublishConfig::load()?;
     let targets = publish::build_targets(&article.targets, &config)?;
 
+    // Prepare every target — local validation plus building the exact request that will be
+    // sent — before any of them makes a network request. An earlier target succeeding (a real,
+    // side-effecting POST) before a later target's purely-local validation failure surfaces
+    // would leave a partial, not-safely-retryable publish (see Target::prepare).
+    let prepared: Vec<_> = targets
+        .iter()
+        .map(|target| target.prepare(&article, args.update))
+        .collect::<Result<_>>()?;
+
+    if args.preflight_only {
+        for target in &targets {
+            println!(
+                "{} {} — ready to publish",
+                style("✓").green().bold(),
+                target.kind()
+            );
+        }
+        return Ok(());
+    }
+
     let mut had_error = false;
-    for target in targets {
+    for (target, prepared) in targets.iter().zip(prepared) {
         print!("{} publishing to {}... ", style("→").dim(), target.kind());
         std::io::stdout().flush().ok();
-        match target.publish(&article, args.update).await {
+        match target.execute(prepared).await {
             Ok(outcome) => println!("{} {}", style("✓").green().bold(), outcome.message),
             Err(e) => {
                 had_error = true;

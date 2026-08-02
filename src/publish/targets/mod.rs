@@ -14,27 +14,26 @@ use anyhow::{Context, Result};
 fn build_one(kind: TargetKind, client: &reqwest::Client, config: &PublishConfig) -> Result<Target> {
     match kind {
         TargetKind::Devto => {
-            let cfg = config
-                .devto
-                .as_ref()
-                .context("no [devto] section in .m2s2-publish.toml")?;
+            let cfg = config.devto.as_ref().context(
+                "no [devto] section in .m2s2-publish.toml (or $M2S2_PUBLISH_DEVTO_API_KEY)",
+            )?;
             Ok(Target::Devto(devto::DevTo::new(client.clone(), cfg)))
         }
         TargetKind::Hashnode => {
-            let cfg = config
-                .hashnode
-                .as_ref()
-                .context("no [hashnode] section in .m2s2-publish.toml")?;
+            let cfg = config.hashnode.as_ref().context(
+                "no [hashnode] section in .m2s2-publish.toml (or $M2S2_PUBLISH_HASHNODE_TOKEN \
+                 + $M2S2_PUBLISH_HASHNODE_PUBLICATION_ID)",
+            )?;
             Ok(Target::Hashnode(hashnode::Hashnode::new(
                 client.clone(),
                 cfg,
             )))
         }
         TargetKind::Platform => {
-            let cfg = config
-                .platform
-                .as_ref()
-                .context("no [platform] section in .m2s2-publish.toml")?;
+            let cfg = config.platform.as_ref().context(
+                "no [platform] section in .m2s2-publish.toml (or $M2S2_PUBLISH_PLATFORM_ENDPOINT \
+                 + $M2S2_PUBLISH_PLATFORM_TOKEN)",
+            )?;
             Ok(Target::Platform(platform::Platform::new(
                 client.clone(),
                 cfg,

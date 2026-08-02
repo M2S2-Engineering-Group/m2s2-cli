@@ -1,8 +1,9 @@
-use crate::publish::article::{Article, slugify};
+use crate::markdown::slugify;
+use crate::publish::article::Article;
 use crate::publish::config::HashnodeConfig;
-use crate::publish::cover_image::{self, CoverImage};
+use crate::publish::cover_image;
 use crate::publish::target::{HttpTarget, PublishOutcome};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 const PUBLISH_POST_MUTATION: &str = r#"
@@ -62,25 +63,53 @@ struct PublishPostInput<'a> {
     cover_image_options: Option<CoverImageOptions<'a>>,
 }
 
+/// Everything `execute` needs, computed once by `prepare` — no lifetime parameter, same
+/// rationale as `devto::PreparedRequest`.
+#[derive(Debug)]
+pub struct PreparedRequest {
+    title: String,
+    content_markdown: String,
+    tags: Vec<String>,
+    slug: String,
+    cover_image_url: Option<String>,
+}
+
 impl Hashnode {
-    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+    /// Shared by `prepare` and (indirectly, via `prepare`) `execute`'s callers, so the two can't
+    /// drift apart on what's checked before any network call happens.
+    pub(crate) fn check_update_supported(update: bool) -> Result<()> {
         if update {
             bail!("the hashnode target doesn't support --update yet");
         }
+        Ok(())
+    }
 
-        let cover_url = match cover_image::resolve(article)? {
-            Some(CoverImage::Url(url)) => Some(url),
-            Some(CoverImage::Local(_)) => {
-                return Err(cover_image::local_path_not_supported_error("hashnode"));
-            }
-            None => None,
-        };
+    /// Local-only: validates `--update` support and `cover_image` compatibility, and builds the
+    /// exact request `execute` will send. No network access.
+    pub fn prepare(&self, article: &Article, update: bool) -> Result<PreparedRequest> {
+        Self::check_update_supported(update)?;
 
+        let cover_image_url = cover_image::resolve_url_only(
+            article.cover_image.as_deref(),
+            &article.base_dir,
+            "hashnode",
+        )?;
+
+        Ok(PreparedRequest {
+            title: article.title.clone(),
+            content_markdown: article.content.clone(),
+            tags: article.tags.clone(),
+            slug: article.slug.clone(),
+            cover_image_url,
+        })
+    }
+
+    pub async fn execute(&self, prepared: PreparedRequest) -> Result<PublishOutcome> {
         let input = PublishPostInput {
-            title: &article.title,
-            content_markdown: &article.content,
+            title: &prepared.title,
+            content_markdown: &prepared.content_markdown,
             publication_id: &self.publication_id,
-            tags: article
+            tags: prepared
                 .tags
                 .iter()
                 .map(|t| Tag {
@@ -88,10 +117,13 @@ impl Hashnode {
                     slug: slugify(t),
                 })
                 .collect(),
-            slug: &article.slug,
-            cover_image_options: cover_url.as_deref().map(|url| CoverImageOptions {
-                cover_image_url: url,
-            }),
+            slug: &prepared.slug,
+            cover_image_options: prepared
+                .cover_image_url
+                .as_deref()
+                .map(|url| CoverImageOptions {
+                    cover_image_url: url,
+                }),
         };
 
         let resp = self
@@ -112,7 +144,9 @@ impl Hashnode {
             bail!("hashnode returned {status}: {text}");
         }
 
-        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        let parsed: serde_json::Value = serde_json::from_str(&text).with_context(|| {
+            format!("hashnode returned {status} but the response body wasn't valid JSON: {text}")
+        })?;
         if let Some(errors) = parsed.get("errors").filter(|e| !e.is_null()) {
             bail!("hashnode returned GraphQL errors: {errors}");
         }
@@ -120,7 +154,9 @@ impl Hashnode {
         let url = parsed
             .pointer("/data/publishPost/post/url")
             .and_then(|v| v.as_str())
-            .unwrap_or("(published, no URL in response)")
+            .with_context(|| {
+                format!("hashnode returned {status} but no post url in the response: {text}")
+            })?
             .to_string();
         Ok(PublishOutcome { message: url })
     }
@@ -173,9 +209,60 @@ mod tests {
             server.base_url(),
         );
 
-        let outcome = target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        let outcome = target.execute(prepared).await.unwrap();
         mock.assert();
         assert_eq!(outcome.message, "https://blog.example.com/hello");
+    }
+
+    #[tokio::test]
+    async fn malformed_json_on_success_status_is_an_error() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let article = sample_article(&dir);
+
+        server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).body("<html>not json</html>");
+        });
+
+        let target = Hashnode::with_endpoint(
+            reqwest::Client::new(),
+            &HashnodeConfig {
+                token: "t".into(),
+                publication_id: "p".into(),
+            },
+            server.base_url(),
+        );
+
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
+        assert!(err.to_string().contains("wasn't valid JSON"));
+    }
+
+    #[tokio::test]
+    async fn missing_post_url_on_success_status_is_an_error() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let article = sample_article(&dir);
+
+        server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).json_body(serde_json::json!({"data": {}}));
+        });
+
+        let target = Hashnode::with_endpoint(
+            reqwest::Client::new(),
+            &HashnodeConfig {
+                token: "t".into(),
+                publication_id: "p".into(),
+            },
+            server.base_url(),
+        );
+
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
+        assert!(err.to_string().contains("no post url"));
     }
 
     #[tokio::test]
@@ -200,7 +287,8 @@ mod tests {
             server.base_url(),
         );
 
-        let err = target.publish(&article, false).await.unwrap_err();
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
         assert!(err.to_string().contains("Hashnode Pro"));
     }
 
@@ -233,7 +321,8 @@ mod tests {
             },
             server.base_url(),
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -257,7 +346,7 @@ mod tests {
             },
             "http://unused",
         );
-        let err = target.publish(&article, false).await.unwrap_err();
+        let err = target.prepare(&article, false).unwrap_err();
         assert!(
             err.to_string()
                 .contains("only accepts an already-hosted URL")

@@ -1,8 +1,8 @@
 use crate::publish::article::Article;
 use crate::publish::config::DevToConfig;
-use crate::publish::cover_image::{self, CoverImage};
+use crate::publish::cover_image;
 use crate::publish::target::{HttpTarget, PublishOutcome};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 pub struct DevTo {
@@ -39,42 +39,73 @@ struct ArticleFields<'a> {
     published: bool,
     description: &'a str,
     /// Dev.to takes a comma-separated string, capped at 4 tags.
-    tags: String,
+    tags: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     main_image: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     canonical_url: Option<&'a str>,
 }
 
+/// Everything `execute` needs, computed once by `prepare` — no lifetime parameter (owned data)
+/// so it can be built for every selected target before any of them sends a request, without
+/// tying its lifetime to how long the command loop holds onto `Article`.
+#[derive(Debug)]
+pub struct PreparedRequest {
+    title: String,
+    body_markdown: String,
+    description: String,
+    tags: String,
+    main_image: Option<String>,
+    canonical_url: Option<String>,
+}
+
 impl DevTo {
-    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+    /// Shared by `prepare` and (indirectly, via `prepare`) `execute`'s callers, so the two can't
+    /// drift apart on what's checked before any network call happens.
+    pub(crate) fn check_update_supported(update: bool) -> Result<()> {
         if update {
             bail!("the devto target doesn't support --update yet");
         }
+        Ok(())
+    }
 
-        let main_image = match cover_image::resolve(article)? {
-            Some(CoverImage::Url(url)) => Some(url),
-            Some(CoverImage::Local(_)) => {
-                return Err(cover_image::local_path_not_supported_error("devto"));
-            }
-            None => None,
-        };
+    /// Local-only: validates `--update` support and `cover_image` compatibility, and builds the
+    /// exact request `execute` will send. No network access.
+    pub fn prepare(&self, article: &Article, update: bool) -> Result<PreparedRequest> {
+        Self::check_update_supported(update)?;
 
+        let main_image = cover_image::resolve_url_only(
+            article.cover_image.as_deref(),
+            &article.base_dir,
+            "devto",
+        )?;
+
+        Ok(PreparedRequest {
+            title: article.title.clone(),
+            body_markdown: article.content.clone(),
+            description: article.summary.clone(),
+            tags: article
+                .tags
+                .iter()
+                .take(4)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(","),
+            main_image,
+            canonical_url: article.canonical_url.clone(),
+        })
+    }
+
+    pub async fn execute(&self, prepared: PreparedRequest) -> Result<PublishOutcome> {
         let body = ArticleBody {
             article: ArticleFields {
-                title: &article.title,
-                body_markdown: &article.content,
+                title: &prepared.title,
+                body_markdown: &prepared.body_markdown,
                 published: true,
-                description: &article.summary,
-                tags: article
-                    .tags
-                    .iter()
-                    .take(4)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(","),
-                main_image: main_image.as_deref(),
-                canonical_url: article.canonical_url.as_deref(),
+                description: &prepared.description,
+                tags: &prepared.tags,
+                main_image: prepared.main_image.as_deref(),
+                canonical_url: prepared.canonical_url.as_deref(),
             },
         };
 
@@ -83,6 +114,7 @@ impl DevTo {
             .client
             .post(format!("{}/api/articles", self.http.base_url))
             .header("api-key", &self.api_key)
+            .header("Accept", "application/vnd.forem.api-v1+json")
             .json(&body)
             .send()
             .await?;
@@ -93,11 +125,15 @@ impl DevTo {
             bail!("dev.to returned {status}: {text}");
         }
 
-        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        let parsed: serde_json::Value = serde_json::from_str(&text).with_context(|| {
+            format!("dev.to returned {status} but the response body wasn't valid JSON: {text}")
+        })?;
         let url = parsed
             .get("url")
             .and_then(|v| v.as_str())
-            .unwrap_or("(published, no URL in response)")
+            .with_context(|| {
+                format!("dev.to returned {status} but no \"url\" field in the response: {text}")
+            })?
             .to_string();
         Ok(PublishOutcome { message: url })
     }
@@ -151,9 +187,58 @@ mod tests {
             server.base_url(),
         );
 
-        let outcome = target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        let outcome = target.execute(prepared).await.unwrap();
         mock.assert();
         assert_eq!(outcome.message, "https://dev.to/x/hello");
+    }
+
+    #[tokio::test]
+    async fn malformed_json_on_success_status_is_an_error() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let article = sample_article(&dir);
+
+        server.mock(|when, then| {
+            when.method(POST).path("/api/articles");
+            then.status(201).body("<html>not json</html>");
+        });
+
+        let target = DevTo::with_base_url(
+            reqwest::Client::new(),
+            &DevToConfig {
+                api_key: "secret".into(),
+            },
+            server.base_url(),
+        );
+
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
+        assert!(err.to_string().contains("wasn't valid JSON"));
+    }
+
+    #[tokio::test]
+    async fn missing_url_field_on_success_status_is_an_error() {
+        let server = MockServer::start();
+        let dir = TempDir::new().unwrap();
+        let article = sample_article(&dir);
+
+        server.mock(|when, then| {
+            when.method(POST).path("/api/articles");
+            then.status(201).json_body(serde_json::json!({"id": 123}));
+        });
+
+        let target = DevTo::with_base_url(
+            reqwest::Client::new(),
+            &DevToConfig {
+                api_key: "secret".into(),
+            },
+            server.base_url(),
+        );
+
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
+        assert!(err.to_string().contains("no \"url\" field"));
     }
 
     #[tokio::test]
@@ -175,7 +260,8 @@ mod tests {
             server.base_url(),
         );
 
-        let err = target.publish(&article, false).await.unwrap_err();
+        let prepared = target.prepare(&article, false).unwrap();
+        let err = target.execute(prepared).await.unwrap_err();
         assert!(err.to_string().contains("422"));
     }
 
@@ -190,7 +276,7 @@ mod tests {
             },
             "http://unused",
         );
-        let err = target.publish(&article, true).await.unwrap_err();
+        let err = target.prepare(&article, true).unwrap_err();
         assert!(err.to_string().contains("doesn't support --update"));
     }
 
@@ -221,7 +307,8 @@ mod tests {
             },
             server.base_url(),
         );
-        target.publish(&article, false).await.unwrap();
+        let prepared = target.prepare(&article, false).unwrap();
+        target.execute(prepared).await.unwrap();
         mock.assert();
     }
 
@@ -244,7 +331,7 @@ mod tests {
             },
             "http://unused",
         );
-        let err = target.publish(&article, false).await.unwrap_err();
+        let err = target.prepare(&article, false).unwrap_err();
         assert!(
             err.to_string()
                 .contains("only accepts an already-hosted URL")

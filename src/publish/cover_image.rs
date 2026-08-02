@@ -1,7 +1,7 @@
-use crate::publish::article::Article;
 use anyhow::{Context, Result};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use std::path::Path;
 
 /// A frontmatter `cover_image` value, resolved into what it actually is: either an
 /// already-hosted URL, or a local file — read into memory since every "local" target that uses
@@ -19,11 +19,16 @@ pub struct LocalImage {
     pub base64_data: String,
 }
 
-/// `None` if the article has no `cover_image`. Reads local files eagerly (`Local` variant),
-/// so callers that can't use one (e.g. Dev.to/Hashnode — see their targets) can fail before
+/// `None` if there's no `cover_image` value. Reads local files eagerly (`Local` variant), so
+/// callers that can't use one (e.g. Dev.to/Hashnode — see their targets) can fail before
 /// spending a network round trip.
-pub fn resolve(article: &Article) -> Result<Option<CoverImage>> {
-    let Some(raw) = article.cover_image.as_deref() else {
+///
+/// Takes the raw frontmatter value and the article's directory directly rather than a whole
+/// `Article`, so any article schema (today: `publish::Article`; later: `content::Article`) can
+/// reuse this without coupling to a specific struct — the logic only ever needed these two
+/// pieces.
+pub fn resolve(cover_image: Option<&str>, base_dir: &Path) -> Result<Option<CoverImage>> {
+    let Some(raw) = cover_image else {
         return Ok(None);
     };
 
@@ -31,7 +36,7 @@ pub fn resolve(article: &Article) -> Result<Option<CoverImage>> {
         return Ok(Some(CoverImage::Url(raw.to_string())));
     }
 
-    let path = article.base_dir.join(raw);
+    let path = base_dir.join(raw);
     let bytes = std::fs::read(&path).with_context(|| {
         format!(
             "cover_image '{raw}' looks like a local path but couldn't be read at {}",
@@ -65,6 +70,21 @@ fn guess_content_type(path: &std::path::Path) -> &'static str {
     }
 }
 
+/// Resolve a `cover_image` value for a target that only accepts an already-hosted URL (Dev.to,
+/// Hashnode — see `local_path_not_supported_error`): a local path is an error here, not
+/// something to defer until later. Called from each target's `prepare`, before any network call.
+pub fn resolve_url_only(
+    cover_image: Option<&str>,
+    base_dir: &Path,
+    target: &str,
+) -> Result<Option<String>> {
+    match resolve(cover_image, base_dir)? {
+        Some(CoverImage::Url(url)) => Ok(Some(url)),
+        Some(CoverImage::Local(_)) => Err(local_path_not_supported_error(target)),
+        None => Ok(None),
+    }
+}
+
 /// A local `cover_image` an error message can point at, for targets whose API only accepts an
 /// already-hosted URL (Dev.to, Hashnode — neither has an image-upload endpoint at all).
 pub fn local_path_not_supported_error(target: &str) -> anyhow::Error {
@@ -78,23 +98,15 @@ pub fn local_path_not_supported_error(target: &str) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::publish::article::parse_article;
     use assert_fs::{TempDir, prelude::*};
-
-    fn article_with_cover(dir: &TempDir, cover_image_line: &str) -> Article {
-        let file = dir.child("post.md");
-        file.write_str(&format!(
-            "---\ntitle: \"T\"\ndate: 2026-07-30\nsummary: \"s\"\npublish: [devto]\n{cover_image_line}\n---\nbody\n"
-        ))
-        .unwrap();
-        parse_article(file.path(), None).unwrap()
-    }
 
     #[test]
     fn url_passes_through_unread() {
         let dir = TempDir::new().unwrap();
-        let article = article_with_cover(&dir, "cover_image: https://example.com/hero.jpg");
-        match resolve(&article).unwrap().unwrap() {
+        match resolve(Some("https://example.com/hero.jpg"), dir.path())
+            .unwrap()
+            .unwrap()
+        {
             CoverImage::Url(url) => assert_eq!(url, "https://example.com/hero.jpg"),
             CoverImage::Local(_) => panic!("expected Url variant"),
         }
@@ -106,9 +118,8 @@ mod tests {
         dir.child("hero.png")
             .write_binary(&[0x89, 0x50, 0x4e, 0x47])
             .unwrap();
-        let article = article_with_cover(&dir, "cover_image: hero.png");
 
-        match resolve(&article).unwrap().unwrap() {
+        match resolve(Some("hero.png"), dir.path()).unwrap().unwrap() {
             CoverImage::Local(img) => {
                 assert_eq!(img.filename, "hero.png");
                 assert_eq!(img.content_type, "image/png");
@@ -121,15 +132,13 @@ mod tests {
     #[test]
     fn missing_local_file_is_a_clear_error() {
         let dir = TempDir::new().unwrap();
-        let article = article_with_cover(&dir, "cover_image: does-not-exist.jpg");
-        let err = resolve(&article).unwrap_err();
+        let err = resolve(Some("does-not-exist.jpg"), dir.path()).unwrap_err();
         assert!(err.to_string().contains("couldn't be read"));
     }
 
     #[test]
     fn no_cover_image_resolves_to_none() {
         let dir = TempDir::new().unwrap();
-        let article = article_with_cover(&dir, "");
-        assert!(resolve(&article).unwrap().is_none());
+        assert!(resolve(None, dir.path()).unwrap().is_none());
     }
 }

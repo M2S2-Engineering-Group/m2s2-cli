@@ -14,6 +14,7 @@ The official CLI for scaffolding and working with [M²S²](https://github.com/M2
   - [generate service](#m2s2-generate-service)
   - [upgrade](#m2s2-upgrade)
   - [completions](#m2s2-completions)
+  - [publish](#m2s2-publish)
 - [Building from Source](#building-from-source)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
@@ -399,6 +400,103 @@ m2s2 upgrade
 ```
 
 The upgrade command hits the GitHub Releases API, compares the latest release tag against the running binary version, and — if a newer version exists — runs the official installer script for your platform. Restart your terminal after upgrading.
+
+---
+
+### `m2s2 publish`
+
+Publish a Markdown article (YAML frontmatter) to Dev.to, Hashnode, and/or your own blog. Unrelated to the scaffolding commands above — this is a general-purpose cross-posting tool that happens to live in the same CLI.
+
+```bash
+m2s2 publish <file> [OPTIONS]
+```
+
+**Arguments**
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Path to the Markdown article |
+
+**Options**
+
+| Flag | Description |
+|------|-------------|
+| `--to <targets>` | Comma-separated target list (`devto`, `hashnode`, `platform`), overriding the frontmatter's `publish:` list |
+| `--update` | Update an existing post instead of creating a new one. Only the `platform` target supports this today — see the table below. |
+| `--preflight-only` | Validate every target and build the exact request each would send, then stop — no network requests, nothing published. |
+
+**Article format**
+
+```markdown
+---
+title: "My Post"
+date: 2026-07-30
+summary: "A short description"
+slug: my-post                # optional, derived from the filename otherwise
+tags: [rust, cli]
+excerpt: "..."                # optional
+cover_image: https://...      # optional — a URL, or a local path resolved relative to the article
+canonical_url: https://...    # optional
+publish: [devto, platform]    # target list, overridden by --to when given
+---
+
+Article body in Markdown.
+```
+
+`cover_image` accepts either an already-hosted URL or a path to a local file. A local path is uploaded automatically for the `platform` target; Dev.to and Hashnode have no image-upload endpoint in their APIs at all, so a local path there fails *before* anything is published (see the preflight note below) — host the image yourself first and use its URL instead.
+
+**Config — `.m2s2-publish.toml`**
+
+Credentials live in a `.m2s2-publish.toml` file in the directory you run `m2s2 publish` from — typically your blog-content repo, not a checkout of this CLI. **Make sure that repo gitignores it**, since it holds secrets.
+
+```toml
+[devto]
+api_key = "..."
+
+[hashnode]
+token = "..."
+publication_id = "..."
+
+[platform]
+endpoint = "https://api.example.com"
+# path = "/admin/blog"                    (optional, this is the default)
+token = "..."
+# body_command = "./hooks/build-body.sh"  (optional, see below)
+```
+
+Any `[section]` that's entirely missing from the file falls back to environment variables instead (the file not existing at all is fine too, as long as env vars cover every target you select). A section already present in the file always wins over env vars — this only fills in a section that's absent, not individual fields within one that exists.
+
+| Target | Env vars |
+|--------|----------|
+| `devto` | `M2S2_PUBLISH_DEVTO_API_KEY` |
+| `hashnode` | `M2S2_PUBLISH_HASHNODE_TOKEN` + `M2S2_PUBLISH_HASHNODE_PUBLICATION_ID` |
+| `platform` | `M2S2_PUBLISH_PLATFORM_ENDPOINT` + `M2S2_PUBLISH_PLATFORM_TOKEN` (optionally `_PATH` / `_BODY_COMMAND`) |
+
+**Targets**
+
+| Target | `--update` | `cover_image` | Notes |
+|--------|------------|----------------|-------|
+| `devto` | Not supported | URL only | Forem/Dev.to API has no image-upload endpoint at all. |
+| `hashnode` | Not supported | URL only | Requires a paid Hashnode Pro subscription as of Hashnode's May 2026 API changes. Same no-upload limitation as Dev.to. |
+| `platform` | Supported | URL, or a local file (uploaded automatically) | A generic target, not specific to any one site — works with any blog exposing a `POST`/`PUT .../admin/blog`-shaped API with bearer auth. `body_command` replaces the request body entirely with your own script's output if the built-in field mapping doesn't match your API. |
+
+**Examples**
+
+```bash
+# Publish to whatever targets are listed in the article's frontmatter
+m2s2 publish posts/my-article.md
+
+# Publish to specific targets regardless of frontmatter
+m2s2 publish posts/my-article.md --to devto,platform
+
+# Update an existing platform post
+m2s2 publish posts/my-article.md --to platform --update
+
+# Check everything's valid without publishing anything
+m2s2 publish posts/my-article.md --preflight-only
+```
+
+Every selected target is validated (`--update` support, `cover_image` compatibility) *and* has its exact request built *before* any of them publishes — Dev.to and Hashnode have no update support, so if one target succeeded and a later one then failed, a retry would create a duplicate post on the ones that already succeeded rather than safely resuming. `--preflight-only` runs just that step and stops, so you can check everything's valid — credentials present, cover images resolvable, request built — without publishing anything.
 
 ---
 

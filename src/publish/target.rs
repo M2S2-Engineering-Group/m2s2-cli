@@ -1,8 +1,8 @@
 use crate::publish::article::Article;
 use crate::publish::target_kind::TargetKind;
-use crate::publish::targets::devto::DevTo;
-use crate::publish::targets::hashnode::Hashnode;
-use crate::publish::targets::platform::Platform;
+use crate::publish::targets::devto::{self, DevTo};
+use crate::publish::targets::hashnode::{self, Hashnode};
+use crate::publish::targets::platform::{self, Platform};
 use anyhow::Result;
 
 #[derive(Debug)]
@@ -39,6 +39,15 @@ pub enum Target {
     Platform(Platform),
 }
 
+/// The output of `Target::prepare` — one variant per [`TargetKind`], mirroring `Target` itself
+/// for the same reason (closed set, no dynamic dispatch needed).
+#[derive(Debug)]
+pub enum PreparedTarget {
+    Devto(devto::PreparedRequest),
+    Hashnode(hashnode::PreparedRequest),
+    Platform(platform::PreparedRequest),
+}
+
 impl Target {
     pub fn kind(&self) -> TargetKind {
         match self {
@@ -48,13 +57,122 @@ impl Target {
         }
     }
 
-    /// `update`: create (`false`) vs. update an existing post (`true`), where the target
-    /// supports the distinction. Targets that don't support updates return an error.
-    pub async fn publish(&self, article: &Article, update: bool) -> Result<PublishOutcome> {
+    /// Validates `article`/`update` against this target — `--update` support (`Devto`/
+    /// `Hashnode` don't have it) and `cover_image` compatibility (a local path is fine for
+    /// `Platform`, an error for `Devto`/`Hashnode`, since neither has an image-upload endpoint)
+    /// — and builds the exact request `execute` will send. No network access; for `Platform`
+    /// specifically, this is also where `body_command` runs, exactly once, since it may be an
+    /// arbitrary side-effecting script that `execute` must not repeat.
+    ///
+    /// Call this for *every* selected target before any of them actually publish: without it,
+    /// an earlier target in the list can succeed — a real, side-effecting POST — before a later
+    /// target's purely-local validation failure is discovered, and a rerun isn't safe
+    /// (Dev.to/Hashnode have no update support, so retrying creates a duplicate post there).
+    pub fn prepare(&self, article: &Article, update: bool) -> Result<PreparedTarget> {
         match self {
-            Self::Devto(t) => t.publish(article, update).await,
-            Self::Hashnode(t) => t.publish(article, update).await,
-            Self::Platform(t) => t.publish(article, update).await,
+            Self::Devto(t) => Ok(PreparedTarget::Devto(t.prepare(article, update)?)),
+            Self::Hashnode(t) => Ok(PreparedTarget::Hashnode(t.prepare(article, update)?)),
+            Self::Platform(t) => Ok(PreparedTarget::Platform(t.prepare(article, update)?)),
         }
+    }
+
+    /// Sends the request `prepare` already built. `prepared` must have come from calling
+    /// `prepare` on this exact `Target` — always true in practice, since nothing else produces
+    /// a `PreparedTarget`.
+    pub async fn execute(&self, prepared: PreparedTarget) -> Result<PublishOutcome> {
+        match (self, prepared) {
+            (Self::Devto(t), PreparedTarget::Devto(p)) => t.execute(p).await,
+            (Self::Hashnode(t), PreparedTarget::Hashnode(p)) => t.execute(p).await,
+            (Self::Platform(t), PreparedTarget::Platform(p)) => t.execute(p).await,
+            _ => unreachable!("a PreparedTarget always matches the Target it was built from"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::publish::article::parse_article;
+    use crate::publish::config::{DevToConfig, PlatformConfig};
+    use assert_fs::{TempDir, prelude::*};
+
+    fn article_with_local_cover(dir: &TempDir) -> Article {
+        dir.child("hero.jpg").write_binary(&[0xff, 0xd8]).unwrap();
+        let file = dir.child("post.md");
+        file.write_str(
+            "---\ntitle: \"T\"\ndate: 2026-07-30\nsummary: \"s\"\n\
+             cover_image: hero.jpg\npublish: [devto]\n---\nbody\n",
+        )
+        .unwrap();
+        parse_article(file.path(), None).unwrap()
+    }
+
+    #[test]
+    fn devto_prepare_rejects_a_local_cover_image_before_any_publish_call() {
+        let dir = TempDir::new().unwrap();
+        let article = article_with_local_cover(&dir);
+        let target = Target::Devto(DevTo::new(
+            reqwest::Client::new(),
+            &DevToConfig {
+                api_key: "x".into(),
+            },
+        ));
+
+        let err = target.prepare(&article, false).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("only accepts an already-hosted URL")
+        );
+    }
+
+    #[test]
+    fn devto_prepare_rejects_update_before_any_publish_call() {
+        let dir = TempDir::new().unwrap();
+        let article = article_with_local_cover(&dir);
+        let target = Target::Devto(DevTo::new(
+            reqwest::Client::new(),
+            &DevToConfig {
+                api_key: "x".into(),
+            },
+        ));
+
+        // update=true should fail on the --update check, not the (also-failing) cover_image
+        // check — prepare must catch the *first* thing execute() would have rejected.
+        let err = target.prepare(&article, true).unwrap_err();
+        assert!(err.to_string().contains("doesn't support --update"));
+    }
+
+    #[test]
+    fn platform_prepare_accepts_a_local_cover_image() {
+        let dir = TempDir::new().unwrap();
+        let article = article_with_local_cover(&dir);
+        let target = Target::Platform(Platform::new(
+            reqwest::Client::new(),
+            &PlatformConfig {
+                endpoint: "http://unused".into(),
+                path: None,
+                token: "x".into(),
+                body_command: None,
+            },
+        ));
+
+        target.prepare(&article, false).unwrap();
+    }
+
+    #[test]
+    fn platform_prepare_accepts_update() {
+        let dir = TempDir::new().unwrap();
+        let article = article_with_local_cover(&dir);
+        let target = Target::Platform(Platform::new(
+            reqwest::Client::new(),
+            &PlatformConfig {
+                endpoint: "http://unused".into(),
+                path: None,
+                token: "x".into(),
+                body_command: None,
+            },
+        ));
+
+        target.prepare(&article, true).unwrap();
     }
 }

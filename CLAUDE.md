@@ -245,3 +245,75 @@ old commit messages over this.
   PUT URLs (client uploads directly, platform never sees the bytes) or keep the existing
   base64-through-Lambda pattern generalized into a standalone endpoint — the two have different
   size limits and latency characteristics worth weighing before choosing.
+
+### Post-review hardening (2026-07-31)
+
+User did their own review of the whole `publish` feature and flagged several real gaps, all
+fixed same day: `Target::preflight()` added (validates every selected target — `cover_image`
+compatibility *and* `--update` support — before any of them makes a network request, since
+Dev.to/Hashnode have no update support and a partial publish followed by a retry would create
+duplicates there); malformed/incomplete success responses in `devto.rs`/`hashnode.rs` are now
+hard errors instead of silently reporting "published, no URL"; Dev.to's documented
+`Accept: application/vnd.forem.api-v1+json` header added; `M2S2_PUBLISH_*` env-var credential
+fallback added to `PublishConfig::load` (only fills in a *wholly absent* `[section]`, TOML
+always wins if present); full `m2s2 publish` section added to README.
+
+**Caught after the first pass, worth remembering**: `preflight()` initially only checked
+`cover_image` — missed that `--update` support is *also* checked inside each target's `publish`
+before any network call (`if update { bail!(...) }` at the top of `devto.rs`/`hashnode.rs`), the
+exact same "validation that fires too late" bug class preflight exists to prevent. Fixed by
+extracting `DevTo::check_update_supported`/`Hashnode::check_update_supported` (`pub(crate)`),
+shared between `publish()` and `Target::preflight()` so the two can't drift apart again. Grepped
+every `bail!`/`Err(` in all three target files to confirm nothing else pre-network-call is still
+uncovered — everything else is response handling, after a request already went out, which isn't
+preflight's job.
+
+Deferred as its own follow-up (design already agreed, not started): a local
+`.m2s2-publish-state.json`-style file (slug → target ID/URL/status), gitignored, enabling
+Dev.to/Hashnode update-by-ID (both APIs confirmed to support it — `PUT /api/articles/{id}` for
+Dev.to, `updatePost(input: UpdatePostInput!)` for Hashnode) and safe retries after a partial
+failure. Also deferred: retry logic for transient (network/5xx) failures specifically.
+
+### `prepare`/`execute` split + `--preflight-only` (2026-07-31)
+
+User added three design docs under `docs/` (`publishing-platform-evaluation.md`,
+`api-verification-preflight.md`, `ai-social-content-architecture.md`) describing a much larger
+expansion: contract-pinned request validation (vendored OpenAPI/GraphQL schemas + scheduled
+CI diff jobs), read-only remote verification, a `PreflightReport`/`--format json`, and a
+completely separate LLM-backed `m2s2 content generate` feature for LinkedIn/X drafts. Too much
+for one pass — implemented only `api-verification-preflight.md`'s own "Phase 1: eliminate
+predictable partial publishes," the smallest slice that's actually complete and shippable on
+its own. Everything else in the three docs is still just a doc — see them directly for the full
+proposals if picking this back up.
+
+**What shipped**: `Target::preflight()` → `Target::prepare()`, returning a `PreparedTarget`
+enum (mirrors `Target` itself — `Devto`/`Hashnode`/`Platform` variants, no trait object, same
+rationale as `Target`'s own doc comment) instead of `Result<()>`. `Target::publish()` →
+`Target::execute(prepared: PreparedTarget)`. Each concrete target
+(`devto.rs`/`hashnode.rs`/`platform.rs`) got the same split: a `PreparedRequest` struct (owned
+data, deliberately no lifetime parameter — see the doc comment on `devto::PreparedRequest` for
+why), `prepare()` builds it (local-only, including — for `Platform` — running `body_command`,
+which must happen exactly once since it's arbitrary user-configured code), `execute()` sends it.
+`commands/publish.rs` now does prepare-all-then-execute-all instead of two separately-computed
+loops; added `--preflight-only`, which stops after a successful prepare-all pass and prints a
+per-target summary — no `--offline` flag or JSON report yet, both explicitly deferred to when
+Phase 2 (remote verification) actually needs them; nothing to skip offline yet since `prepare`
+never touches the network.
+
+**Verified live, not just via tests**: built a throwaway article + `.m2s2-publish.toml` with a
+deliberately wrong Dev.to API key. `--preflight-only` succeeded (proves no network call — a real
+attempt would've hit Dev.to's real API and failed on the bad key); running the same command
+*without* the flag did reach the real API and correctly got a 403. All 67 unit tests pass
+(rewrote every test that called the old single-step `publish()` into `prepare()` then
+`execute()`), clippy/fmt clean, pre-commit hook exits 0.
+
+Explicitly deferred, with one-line reasons already captured in the plan file at the time (check
+`/home/mgmaster/.claude/plans/` if it's still there, otherwise this paragraph is the summary):
+contract pinning + remote verification (Phase 2/3 of the preflight doc — real new dependencies,
+a new CI job, not needed for this phase to stand on its own); publication-state + ID-based
+updates (inert without a structured remote ID, and today's `PublishOutcome.message` is a display
+string — bundling means widening that interface for a feature this pass doesn't need); the
+entire AI content-generation feature (self-contained, shares nothing with `publish` but
+`Article` — its own plan/session; worth reusing `Article`/`parse_article`, the `cover_image.rs`
+Url-vs-Local/`base_dir`-relative pattern, and `config.rs`'s "env fills in only a wholly-absent
+section" fallback rule rather than reinventing any of them).
