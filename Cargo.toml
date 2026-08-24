@@ -1,6 +1,6 @@
 [package]
 name = "m2s2-cli"
-version = "0.2.19"
+version = "0.2.20"
 edition = "2024"
 description = "CLI for scaffolding M²S² design system projects"
 authors = ["M²S² Engineering Group <contact@m2s2.io>"]
